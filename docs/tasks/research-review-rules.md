@@ -21,11 +21,12 @@ Per-repo tuning is the prerequisite for the Phase 1 calibration KPIs (`design.md
 You need:
 
 1. **agent-secretary repo cloned** with `uv sync --all-packages` already run.
-2. **Bare clones of all 7 target repos** at `$AGENT_WORKSPACE_DIR/repos/`. If they aren't there yet, run [`docs/workspace.md §3-1`](../workspace.md) first — requires `GITHUB_TOKEN` with read access to `mesher-labs/*`.
-3. **A research worktree per repo** mounted on the production branch (read-only inspection):
+2. **Bare clones of all 7 target repos** at `$AGENT_WORKSPACE_DIR/repos/`. If they aren't there yet, run [`docs/workspace.md §3-1`](../workspace.md) first — either via `gh auth setup-git` (option A, recommended for local dev) or `GITHUB_TOKEN` (option B, headless).
+3. **A research worktree per repo** mounted on the production branch (read-only inspection). Skip the fetch if you don't have token access — the bare clones are recent enough for static directory inspection:
 
 ```bash
 export AGENT_WORKSPACE_DIR=${AGENT_WORKSPACE_DIR:-~/agent-workspace}
+FETCH_FIRST=${FETCH_FIRST:-0}   # set to 1 if you have token access and want latest
 
 # Production branch per repo (from service_map.py SERVICE_MAP):
 declare -A REPO_PROD=(
@@ -43,7 +44,7 @@ for repo in "${!REPO_PROD[@]}"; do
   branch="${REPO_PROD[$repo]}"
   wt="$AGENT_WORKSPACE_DIR/worktrees/research--${repo}"
   [ -d "$wt" ] && continue
-  git -C "$bare" fetch --all --prune
+  [ "$FETCH_FIRST" = "1" ] && git -C "$bare" fetch --all --prune
   git -C "$bare" worktree add --detach "$wt" "$branch"
   echo "mounted $repo @ $branch -> $wt"
 done

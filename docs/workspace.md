@@ -35,22 +35,38 @@ $AGENT_WORKSPACE_DIR/
 
 ### 3-1. 로컬 dev (bare 직접 clone)
 
+토큰 인증 방법 두 가지:
+
+**옵션 A — `gh` CLI (권장 for 로컬 dev)**
+
+`gh` 가 git credential helper 로 동작 → 토큰을 URL 에 박지 않아도 됨. App 이 아직 모든 레포에 설치되지 않은 단계에서 *자기 GitHub 계정 권한*으로 clone 가능:
+
 ```bash
-export GITHUB_TOKEN=<token>
+gh auth login                                  # 한 번만
+gh auth setup-git                              # git 이 gh 자격증명 사용
 export AGENT_WORKSPACE_DIR=~/agent-workspace
 mkdir -p "$AGENT_WORKSPACE_DIR/repos"
 
-repos=(
-  viv-monorepo
-  project-201-server
-  project-201-flutter
-  if-character-chat-server
-  if-character-chat-client
-  hokki-server
-  hokki_flutter_app
-)
+repos=(viv-monorepo project-201-server project-201-flutter
+       if-character-chat-server if-character-chat-client
+       hokki-server hokki_flutter_app)
 ORG=mesher-labs
 
+for repo in "${repos[@]}"; do
+  git clone --bare \
+    "https://github.com/${ORG}/${repo}.git" \
+    "$AGENT_WORKSPACE_DIR/repos/${repo}.git"
+done
+```
+
+**옵션 B — 토큰 URL (CI / 헤드리스 환경)**
+
+```bash
+export GITHUB_TOKEN=<token>   # PAT 또는 GitHub App installation token
+export AGENT_WORKSPACE_DIR=~/agent-workspace
+mkdir -p "$AGENT_WORKSPACE_DIR/repos"
+
+# repos / ORG 변수는 옵션 A 와 동일
 for repo in "${repos[@]}"; do
   git clone --bare \
     "https://${GITHUB_TOKEN}@github.com/${ORG}/${repo}.git" \
@@ -59,6 +75,8 @@ done
 ```
 
 > 단일 진실 원천: 어떤 레포가 어떤 서비스에 속하고 어떤 브랜치 전략을 갖는지는 [`packages/config/agent_secretary_config/service_map.py`](../packages/config/agent_secretary_config/service_map.py) 의 `SERVICE_MAP` 참조. `all_repos()` 로 자동 생성도 가능 (구현 시 utility 작성).
+>
+> 보안 비교: 옵션 A 는 토큰이 git config 에 저장 안 됨 (gh 가 매번 helper 로 주입). 옵션 B 는 bare repo 의 `config` 에 평문 박힘 — 디스크 권한 600 권장.
 
 ### 3-2. 도커 (런타임 자동 clone)
 
