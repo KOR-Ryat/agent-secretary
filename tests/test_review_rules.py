@@ -127,3 +127,97 @@ def test_compute_risk_metadata_unknown_repo_falls_back_to_defaults():
     }
     risk = _compute_risk_metadata(pr, "nobody/nothing")
     assert "auth/" in risk.high_risk_paths_touched  # default applies
+
+
+# --- Per-repo review-rule sanity checks ----------------------------------
+#
+# One assertion per repo on a distinctive value. These guard against a
+# field being silently dropped or mis-edited later. They do NOT exhaust
+# every prefix — that would lock the data into the test file.
+
+
+def test_viv_monorepo_review_rules_match_monorepo_layout():
+    rules = review_rules_for("mesher-labs/viv-monorepo")
+    resolved = resolve_rules(rules)
+    assert "server/src/modules/auth/" in resolved.high_risk_paths
+    assert "server/src/modules/payment/" in resolved.high_risk_paths
+    assert "server/src/database/migrations/" in resolved.high_risk_paths
+    assert ".spec.ts" in resolved.test_file_patterns
+    assert "_test.dart" in resolved.test_file_patterns
+    assert "bun.lock" in resolved.dependency_file_patterns
+    assert "pubspec.lock" in resolved.dependency_file_patterns
+
+
+def test_project_201_server_review_rules_match_python_fastapi_layout():
+    rules = review_rules_for("mesher-labs/project-201-server")
+    resolved = resolve_rules(rules)
+    assert "app/router/payment.py" in resolved.high_risk_paths
+    assert "app/infrastructure/service/payment/" in resolved.high_risk_paths
+    assert "supabase/migrations/" in resolved.high_risk_paths
+    assert "test_" in resolved.test_file_patterns
+    assert "pyproject.toml" in resolved.dependency_file_patterns
+    assert "poetry.lock" in resolved.dependency_file_patterns
+
+
+def test_project_201_flutter_review_rules_cover_iap_and_native_signing():
+    rules = review_rules_for("mesher-labs/project-201-flutter")
+    resolved = resolve_rules(rules)
+    assert "lib/features/auth/" in resolved.high_risk_paths
+    assert "lib/core/infrastructure/iap/" in resolved.high_risk_paths
+    assert "android/app/google-services.json" in resolved.high_risk_paths
+    assert "ios/Runner.xcodeproj/" in resolved.high_risk_paths
+    assert "_test.dart" in resolved.test_file_patterns
+    assert "pubspec.lock" in resolved.dependency_file_patterns
+
+
+def test_if_character_chat_server_review_rules_match_python_layout():
+    """Despite the unusual `release/main/cbt` branch name, auth/payment
+    live at standard src/ paths — verify we didn't get fooled into using
+    a cbt/ prefix."""
+    rules = review_rules_for("mesher-labs/if-character-chat-server")
+    resolved = resolve_rules(rules)
+    assert "src/api/v1/auth.py" in resolved.high_risk_paths
+    assert "src/api/v1/webhooks.py" in resolved.high_risk_paths
+    assert "src/infrastructure/portone/" in resolved.high_risk_paths
+    assert "src/infrastructure/polar/" in resolved.high_risk_paths
+    assert "migrations/" in resolved.high_risk_paths
+    assert not any("cbt/" in p for p in resolved.high_risk_paths)
+    assert "test_" in resolved.test_file_patterns
+    assert "pyproject.toml" in resolved.dependency_file_patterns
+
+
+def test_if_character_chat_client_review_rules_falls_back_for_tests():
+    """The client has no test framework configured — test_file_patterns
+    is intentionally omitted so the module default applies."""
+    rules = review_rules_for("mesher-labs/if-character-chat-client")
+    resolved = resolve_rules(rules)
+    assert "src/lib/payment/" in resolved.high_risk_paths
+    assert "src/app/api/auth/" in resolved.high_risk_paths
+    assert "src/services/paymentService.ts" in resolved.high_risk_paths
+    # Test patterns omitted → fallback to module defaults.
+    assert resolved.test_file_patterns == TEST_FILE_MARKERS
+    assert "yarn.lock" in resolved.dependency_file_patterns
+
+
+def test_hokki_server_review_rules_match_nestjs_mongodb_layout():
+    rules = review_rules_for("mesher-labs/hokki-server")
+    resolved = resolve_rules(rules)
+    assert "src/auth/" in resolved.high_risk_paths
+    assert "src/payment/" in resolved.high_risk_paths
+    assert "src/in-app-payment/" in resolved.high_risk_paths
+    # MongoDB repo: custom migration runner under src/scripts/migration/.
+    assert "src/scripts/migration/" in resolved.high_risk_paths
+    assert ".spec.ts" in resolved.test_file_patterns
+    assert ".e2e-spec.ts" in resolved.test_file_patterns
+    assert "yarn.lock" in resolved.dependency_file_patterns
+
+
+def test_hokki_flutter_app_review_rules_cover_iap_and_native_signing():
+    rules = review_rules_for("mesher-labs/hokki_flutter_app")
+    resolved = resolve_rules(rules)
+    assert "lib/core/auth/" in resolved.high_risk_paths
+    # IAP is a single file rather than a dir in this repo.
+    assert "lib/services/in_app_purchase_service.dart" in resolved.high_risk_paths
+    assert "android/app/google-services.json" in resolved.high_risk_paths
+    assert "_test.dart" in resolved.test_file_patterns
+    assert "pubspec.lock" in resolved.dependency_file_patterns

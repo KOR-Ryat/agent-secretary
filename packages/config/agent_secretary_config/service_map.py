@@ -8,7 +8,6 @@ Static config used by:
 Per-codebase tuning is intentional. Changes here are config edits, not
 code changes — review them as you would any data file.
 """
-# ruff: noqa: E501 — service-map rows are deliberately one-line for table-readability.
 
 from __future__ import annotations
 
@@ -70,8 +69,48 @@ SERVICE_MAP: dict[str, Service] = {
     "if": Service(
         key="if",
         repos=(
-            Repo(name="mesher-labs/project-201-server", production="main", staging="stage", dev="dev"),
-            Repo(name="mesher-labs/project-201-flutter", production="main", staging="stage", dev="dev"),
+            Repo(
+                name="mesher-labs/project-201-server",
+                production="main",
+                staging="stage",
+                dev="dev",
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "app/middleware/auth_middleware.py",
+                        "app/router/auth.py",
+                        "app/router/payment.py",
+                        "app/router/subscription.py",
+                        "app/infrastructure/service/auth_service.py",
+                        "app/infrastructure/service/payment/",
+                        "app/infrastructure/repository/auth_repository.py",
+                        "supabase/migrations/",
+                    ),
+                    test_file_patterns=("test_", "_test.py", "tests/"),
+                    dependency_file_patterns=("pyproject.toml", "poetry.lock"),
+                ),
+            ),
+            Repo(
+                name="mesher-labs/project-201-flutter",
+                production="main",
+                staging="stage",
+                dev="dev",
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "lib/features/auth/",
+                        "lib/features/shop/",
+                        "lib/core/infrastructure/iap/",
+                        "lib/core/repositories/auth_repository.dart",
+                        "lib/core/repositories/subscription_repository.dart",
+                        "lib/core/repositories/subscription_history_repository.dart",
+                        "android/app/build.gradle",
+                        "android/app/google-services.json",
+                        "ios/Runner.xcodeproj/",
+                        "ios/Podfile.lock",
+                    ),
+                    test_file_patterns=("_test.dart", "test/"),
+                    dependency_file_patterns=("pubspec.yaml", "pubspec.lock", "Podfile.lock"),
+                ),
+            ),
         ),
         channels=(
             Channel(id="C099J0X5ZPF", name="if-dm-production", env="production"),
@@ -87,8 +126,58 @@ SERVICE_MAP: dict[str, Service] = {
     "ifcc": Service(
         key="ifcc",
         repos=(
-            Repo(name="mesher-labs/if-character-chat-server", production="release/main/cbt", staging="release/stage/cbt", dev="dev"),
-            Repo(name="mesher-labs/if-character-chat-client", production="main", staging="stage", dev="dev"),
+            Repo(
+                name="mesher-labs/if-character-chat-server",
+                production="release/main/cbt",
+                staging="release/stage/cbt",
+                dev="dev",
+                # Python FastAPI + Alembic. Auth/payment live at standard
+                # locations under src/, NOT inside a cbt/ subtree (the
+                # `cbt` in the branch name is a release track, not a code
+                # split). Poetry lockfile is generated at Docker build
+                # time and not committed — only pyproject.toml is tracked.
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "src/api/v1/auth.py",
+                        "src/api/v1/payments.py",
+                        "src/api/v1/webhooks.py",
+                        "src/services/auth_service.py",
+                        "src/services/payment_",
+                        "src/services/billing_key_service.py",
+                        "src/services/webhook_verification_service.py",
+                        "src/infrastructure/oauth/",
+                        "src/infrastructure/portone/",
+                        "src/infrastructure/polar/",
+                        "migrations/",
+                    ),
+                    test_file_patterns=("test_", "_test.py", "tests/"),
+                    dependency_file_patterns=("pyproject.toml",),
+                ),
+            ),
+            Repo(
+                name="mesher-labs/if-character-chat-client",
+                production="main",
+                staging="stage",
+                dev="dev",
+                # Next.js 16 + TypeScript + yarn. No test framework is
+                # configured (no jest/vitest in devDependencies, no test
+                # files exist), so test_file_patterns is omitted and the
+                # module default applies.
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "src/app/api/auth/",
+                        "src/lib/auth/",
+                        "src/lib/payment/",
+                        "src/services/authService.ts",
+                        "src/services/paymentService.ts",
+                        "src/hooks/feature/auth/",
+                        "src/hooks/feature/payment/",
+                        "src/hooks/stores/useAuthStore.ts",
+                        "src/app/[locale]/payment/",
+                    ),
+                    dependency_file_patterns=("package.json", "yarn.lock"),
+                ),
+            ),
         ),
         channels=(
             Channel(id="C0ADCFJG0SE", name="ifcc-admin-production", env="production"),
@@ -104,7 +193,34 @@ SERVICE_MAP: dict[str, Service] = {
     "viv": Service(
         key="viv",
         repos=(
-            Repo(name="mesher-labs/viv-monorepo", production="main", staging="stage", dev="dev"),
+            Repo(
+                name="mesher-labs/viv-monorepo",
+                production="main",
+                staging="stage",
+                dev="dev",
+                # Bun-based monorepo: NestJS server (server/), Flutter
+                # mobile (mobile/), Cloudflare workers (cloudflare/),
+                # web (web/), shared packages/. Multiple lockfiles —
+                # bun.lock at root + pnpm-lock.yaml under cloudflare/.
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "server/src/modules/auth/",
+                        "server/src/modules/payment/",
+                        "server/src/database/migrations/",
+                        "mobile/android/app/build.gradle.kts",
+                        "mobile/ios/Runner.xcodeproj/",
+                        "mobile/ios/Podfile.lock",
+                    ),
+                    test_file_patterns=(".spec.ts", ".test.ts", ".test.mjs", "_test.dart"),
+                    dependency_file_patterns=(
+                        "package.json",
+                        "bun.lock",
+                        "pnpm-lock.yaml",
+                        "pubspec.yaml",
+                        "pubspec.lock",
+                    ),
+                ),
+            ),
         ),
         channels=(
             Channel(id="C0AP99YFQNN", name="viv-app-production", env="production"),
@@ -117,8 +233,51 @@ SERVICE_MAP: dict[str, Service] = {
     "zendi": Service(
         key="zendi",
         repos=(
-            Repo(name="mesher-labs/hokki-server", production="master", staging="stage", dev="dev"),
-            Repo(name="mesher-labs/hokki_flutter_app", production="main", staging="develop", dev="develop"),
+            Repo(
+                name="mesher-labs/hokki-server",
+                production="master",
+                staging="stage",
+                dev="dev",
+                # NestJS + MongoDB (no relational migrations dir); custom
+                # migration runner under src/scripts/migration/. Yarn
+                # lockfile. Toss Payments + Apple/Google IAP.
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "src/auth/",
+                        "src/payment/",
+                        "src/in-app-payment/",
+                        "src/scripts/migration/",
+                        "src/common/config/auth.config.ts",
+                        "src/common/config/toss.payment.config.ts",
+                    ),
+                    test_file_patterns=(".spec.ts", ".e2e-spec.ts"),
+                    dependency_file_patterns=("package.json", "yarn.lock"),
+                ),
+            ),
+            Repo(
+                name="mesher-labs/hokki_flutter_app",
+                production="main",
+                staging="develop",
+                dev="develop",
+                # IAP logic concentrated in single files under
+                # lib/services/, not a dedicated payment dir — pin them
+                # explicitly rather than relying on a directory prefix.
+                review_rules=ReviewRules(
+                    high_risk_paths=(
+                        "lib/core/auth/",
+                        "lib/services/in_app_purchase_service.dart",
+                        "lib/services/session_manager_service.dart",
+                        "lib/utils/auth_storage_util.dart",
+                        "lib/core/network/interceptors/auth_interceptor.dart",
+                        "android/app/build.gradle",
+                        "android/app/google-services.json",
+                        "ios/Runner.xcodeproj/",
+                        "ios/Podfile.lock",
+                    ),
+                    test_file_patterns=("_test.dart", "test/"),
+                    dependency_file_patterns=("pubspec.yaml", "pubspec.lock", "Podfile.lock"),
+                ),
+            ),
         ),
         channels=(
             Channel(id="C07K26G5CNB", name="zendi-alarm-production", env="production"),
