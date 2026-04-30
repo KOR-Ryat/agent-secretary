@@ -1,8 +1,9 @@
 """Dashboard FastAPI routes.
 
-  - GET  /              → dashboard index.html (inline CSS/JS, no assets)
-  - GET  /api/traces    → recent traces (list, paginated)
-  - GET  /api/traces/{task_id} → full trace detail
+  - GET  /                              → dashboard index.html
+  - GET  /api/traces                    → recent traces (paginated)
+  - GET  /api/traces/{task_id}          → full trace detail
+  - GET  /api/stats/decisions?range=…   → decision distribution + avg conf
 
 If `DATABASE_URL` is unset (e.g. dev without Postgres), `/` still serves
 the HTML but the API endpoints respond 503 — the UI displays a banner.
@@ -21,7 +22,7 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
-from ingress.dashboard.traces import TraceReader
+from ingress.dashboard.traces import _RANGE_TO_INTERVAL, TraceReader
 from ingress.logging import get_logger
 
 log = get_logger("ingress.dashboard.routes")
@@ -58,6 +59,22 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
         if row is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return JSONResponse(_serialize(row))
+
+    @router.get("/api/stats/decisions")
+    async def stats_decisions(
+        range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),
+    ) -> JSONResponse:
+        if range not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400,
+                detail=f"invalid range; expected one of {sorted(_RANGE_TO_INTERVAL)}",
+            )
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        stats = await trace_reader.stats_decisions(range)
+        return JSONResponse(_serialize(stats))
 
     app.include_router(router)
 

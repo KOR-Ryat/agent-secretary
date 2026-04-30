@@ -29,9 +29,42 @@
     }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; }
     header .sub { color: var(--fg-muted); font-size: 13px; }
-    main { display: grid; grid-template-columns: 480px 1fr; height: calc(100vh - 56px); }
+    main { display: grid; grid-template-columns: 480px 1fr; height: calc(100vh - 56px - var(--kpi-h, 0px)); }
     .left { border-right: 1px solid var(--border); overflow-y: auto; }
     .right { padding: 20px; overflow-y: auto; }
+    .kpi-row {
+      display: flex; gap: 12px; padding: 12px 24px;
+      border-bottom: 1px solid var(--border); background: var(--panel);
+      align-items: stretch; flex-wrap: wrap;
+    }
+    .kpi-card {
+      flex: 1 1 140px; min-width: 140px; padding: 10px 14px;
+      background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .kpi-card .label {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; margin-bottom: 4px;
+    }
+    .kpi-card .value { font-size: 20px; font-weight: 600; }
+    .kpi-card .sub {
+      color: var(--fg-muted); font-size: 11px; margin-top: 2px;
+    }
+    .kpi-card.escalate .value { color: var(--escalate); }
+    .kpi-card.auto .value { color: var(--ok); }
+    .kpi-card.changes .value { color: var(--warn); }
+    .range-picker {
+      display: flex; gap: 4px; align-items: center;
+      margin-left: auto; align-self: center;
+    }
+    .range-picker button {
+      background: var(--panel-2); color: var(--fg-muted);
+      border: 1px solid var(--border); padding: 4px 10px;
+      border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .range-picker button.active {
+      background: var(--bg); color: var(--fg); border-color: var(--link);
+    }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -89,9 +122,10 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
-    <button class="refresh" onclick="loadList()">↻ refresh</button>
+    <button class="refresh" onclick="loadList(); loadKpi();">↻ refresh</button>
   </header>
   <div id="banner"></div>
+  <div class="kpi-row" id="kpi"></div>
   <main>
     <div class="left" id="list"><div class="empty">로딩 중…</div></div>
     <div class="right" id="detail"><div class="empty">왼쪽에서 항목을 선택하세요.</div></div>
@@ -99,6 +133,67 @@
 
   <script>
     let selectedTaskId = null;
+    let kpiRange = '24h';
+    const RANGE_LABELS = { '1h': '최근 1시간', '6h': '최근 6시간', '24h': '최근 24시간', '7d': '최근 7일', '30d': '최근 30일', 'all': '전체' };
+
+    function pct(n, total) {
+      if (!total) return '0%';
+      return (100 * n / total).toFixed(0) + '%';
+    }
+
+    async function loadKpi() {
+      const el = document.getElementById('kpi');
+      try {
+        const res = await fetch('/api/stats/decisions?range=' + encodeURIComponent(kpiRange));
+        if (res.status === 503) {
+          el.innerHTML = '';
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        const conf = s.avg_confidence == null ? '—' : (+s.avg_confidence).toFixed(2);
+        const escRate = (100 * (s.escalation_rate || 0)).toFixed(0) + '%';
+        const rangeButtons = ['1h','6h','24h','7d','30d','all'].map(r =>
+          `<button class="${r === kpiRange ? 'active' : ''}" onclick="setRange('${r}')">${r}</button>`
+        ).join('');
+        el.innerHTML = `
+          <div class="kpi-card">
+            <div class="label">Total · ${RANGE_LABELS[s.range] || s.range}</div>
+            <div class="value">${s.total}</div>
+            <div class="sub">decisions completed</div>
+          </div>
+          <div class="kpi-card auto">
+            <div class="label">Auto-merge</div>
+            <div class="value">${s.auto_merge}</div>
+            <div class="sub">${pct(s.auto_merge, s.total)}</div>
+          </div>
+          <div class="kpi-card changes">
+            <div class="label">Request changes</div>
+            <div class="value">${s.request_changes}</div>
+            <div class="sub">${pct(s.request_changes, s.total)}</div>
+          </div>
+          <div class="kpi-card escalate">
+            <div class="label">Escalate to human</div>
+            <div class="value">${s.escalate}</div>
+            <div class="sub">${pct(s.escalate, s.total)} · escalation rate ${escRate}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Avg confidence</div>
+            <div class="value">${conf}</div>
+            <div class="sub">${s.no_decision ? s.no_decision + ' missing decision' : 'all decided'}</div>
+          </div>
+          <div class="range-picker">${rangeButtons}</div>
+        `;
+        document.documentElement.style.setProperty('--kpi-h', el.offsetHeight + 'px');
+      } catch (e) {
+        el.innerHTML = `<div class="kpi-card"><div class="label">stats</div><div class="value">—</div><div class="sub">불러오기 실패</div></div>`;
+      }
+    }
+
+    function setRange(r) {
+      kpiRange = r;
+      loadKpi();
+    }
 
     function decisionClass(d) {
       if (!d) return 'none';
@@ -206,7 +301,9 @@
     }
 
     loadList();
+    loadKpi();
     setInterval(loadList, 30000);  // refresh every 30s
+    setInterval(loadKpi, 30000);
   </script>
 </body>
 </html>

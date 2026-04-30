@@ -45,6 +45,35 @@ WHERE task_id = %s
 """
 
 
+# Range token → SQL interval. Whitelisted to avoid string interpolation
+# of user input into the query. `all` means no time filter.
+_RANGE_TO_INTERVAL: dict[str, str | None] = {
+    "1h": "1 hour",
+    "6h": "6 hours",
+    "24h": "24 hours",
+    "7d": "7 days",
+    "30d": "30 days",
+    "all": None,
+}
+
+
+def _decision_stats_sql(*, with_window: bool) -> str:
+    where = "WHERE completed_at IS NOT NULL"
+    if with_window:
+        where += " AND completed_at >= NOW() - %s::interval"
+    return f"""
+SELECT
+    COUNT(*)::int                                                          AS total,
+    COUNT(*) FILTER (WHERE cto_output ->> 'decision' = 'auto-merge')::int  AS auto_merge,
+    COUNT(*) FILTER (WHERE cto_output ->> 'decision' = 'request-changes')::int AS request_changes,
+    COUNT(*) FILTER (WHERE cto_output ->> 'decision' = 'escalate-to-human')::int AS escalate,
+    COUNT(*) FILTER (WHERE cto_output ->> 'decision' IS NULL)::int         AS no_decision,
+    AVG(NULLIF(cto_output ->> 'confidence', '')::float)                    AS avg_confidence
+FROM pr_trace
+{where}
+"""
+
+
 class TraceReader:
     """Async reader over `pr_trace`.
 
@@ -79,3 +108,40 @@ class TraceReader:
         async with self._conn.cursor() as cur:
             await cur.execute(_DETAIL_SQL, (task_id,))
             return await cur.fetchone()
+
+    async def stats_decisions(self, range_token: str = "24h") -> dict[str, Any]:
+        """Aggregate decision distribution + avg confidence over a window.
+
+        ``range_token`` must be one of ``_RANGE_TO_INTERVAL``; an unknown
+        value raises ``ValueError`` (the route validates before calling).
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        if range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+        interval = _RANGE_TO_INTERVAL[range_token]
+        sql = _decision_stats_sql(with_window=interval is not None)
+        params: tuple[Any, ...] = (interval,) if interval is not None else ()
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, params)
+            row = await cur.fetchone()
+        # Empty table → all zeros, avg None.
+        row = row or {
+            "total": 0,
+            "auto_merge": 0,
+            "request_changes": 0,
+            "escalate": 0,
+            "no_decision": 0,
+            "avg_confidence": None,
+        }
+        total = row["total"] or 0
+        escalation_rate = (row["escalate"] / total) if total else 0.0
+        return {
+            "range": range_token,
+            "total": total,
+            "auto_merge": row["auto_merge"],
+            "request_changes": row["request_changes"],
+            "escalate": row["escalate"],
+            "no_decision": row["no_decision"],
+            "escalation_rate": escalation_rate,
+            "avg_confidence": row["avg_confidence"],
+        }

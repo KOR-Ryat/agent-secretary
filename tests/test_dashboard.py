@@ -5,6 +5,8 @@ Verifies:
   - /api/traces returns 503 when DB unconfigured
   - /api/traces returns the rows yielded by an injected TraceReader
   - /api/traces/{task_id} returns the row, or 404 if missing
+  - /api/stats/decisions returns aggregate KPIs
+  - /api/stats/decisions rejects unknown range tokens
 """
 
 from __future__ import annotations
@@ -83,6 +85,71 @@ def test_api_trace_detail_404_when_missing():
     client = TestClient(app)
     res = client.get("/api/traces/missing")
     assert res.status_code == 404
+
+
+def test_api_stats_decisions_503_when_no_db():
+    from fastapi.testclient import TestClient
+
+    app = _make_app(trace_reader=None)
+    client = TestClient(app)
+    res = client.get("/api/stats/decisions?range=24h")
+    assert res.status_code == 503
+
+
+def test_api_stats_decisions_returns_aggregate():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_decisions.return_value = {
+        "range": "24h",
+        "total": 10,
+        "auto_merge": 6,
+        "request_changes": 2,
+        "escalate": 1,
+        "no_decision": 1,
+        "escalation_rate": 0.1,
+        "avg_confidence": 0.83,
+    }
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/decisions?range=24h")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 10
+    assert body["auto_merge"] == 6
+    assert body["escalation_rate"] == 0.1
+    reader.stats_decisions.assert_awaited_once_with("24h")
+
+
+def test_api_stats_decisions_rejects_invalid_range():
+    """Unknown range tokens must 400 — never reach the SQL layer."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/decisions?range=nope")
+    assert res.status_code == 400
+    reader.stats_decisions.assert_not_awaited()
+
+
+def test_api_stats_decisions_default_range_is_24h():
+    """No range param → defaults to 24h (sensible recent-activity window)."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_decisions.return_value = {
+        "range": "24h", "total": 0, "auto_merge": 0,
+        "request_changes": 0, "escalate": 0, "no_decision": 0,
+        "escalation_rate": 0.0, "avg_confidence": None,
+    }
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/decisions")
+    assert res.status_code == 200
+    reader.stats_decisions.assert_awaited_once_with("24h")
 
 
 def test_api_trace_detail_returns_row():
