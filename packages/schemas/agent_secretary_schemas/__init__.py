@@ -2,8 +2,11 @@ from agent_secretary_schemas.events import ChannelTarget, RawEvent, ResponseRout
 from agent_secretary_schemas.personas import (
     CtoOutput,
     Finding,
+    FindingWithDomain,
     LeadOutput,
+    MonolithicReviewOutput,
     PersonaOutput,
+    ReviewDomain,
     UnresolvedSpecialistDissent,
 )
 from agent_secretary_schemas.results import ResultEvent
@@ -13,11 +16,14 @@ __all__ = [
     "ChannelTarget",
     "CtoOutput",
     "Finding",
+    "FindingWithDomain",
     "LeadOutput",
+    "MonolithicReviewOutput",
     "PersonaOutput",
     "RawEvent",
     "ResponseRouting",
     "ResultEvent",
+    "ReviewDomain",
     "TaskSpec",
     "UnresolvedSpecialistDissent",
 ]

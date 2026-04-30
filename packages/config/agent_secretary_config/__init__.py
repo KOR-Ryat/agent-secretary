@@ -34,6 +34,7 @@ from agent_secretary_config.workflows import (
     WORKFLOW_CODE_MODIFY,
     WORKFLOW_LINEAR_ISSUE,
     WORKFLOW_PR_REVIEW,
+    WORKFLOW_PR_REVIEW_MONOLITHIC,
     classify_slack_text,
 )
 
@@ -56,6 +57,7 @@ __all__ = [
     "WORKFLOW_CODE_MODIFY",
     "WORKFLOW_LINEAR_ISSUE",
     "WORKFLOW_PR_REVIEW",
+    "WORKFLOW_PR_REVIEW_MONOLITHIC",
     "Channel",
     "ChannelResolution",
     "Repo",

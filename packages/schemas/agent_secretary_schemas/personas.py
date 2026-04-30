@@ -15,6 +15,25 @@ class Finding(BaseModel):
     threat_or_impact: str
 
 
+# Domains used for cross-A/B comparison; matches the value of
+# `PersonaOutput.domain` so findings from both styles can be tallied
+# the same way.
+ReviewDomain = Literal[
+    "security", "quality", "ops", "compatibility", "product_ux"
+]
+
+
+class FindingWithDomain(Finding):
+    """Finding tagged with its domain.
+
+    Used by the monolithic A/B workflow where one agent produces all
+    findings — the domain has to live on the finding itself rather
+    than on a separating persona.
+    """
+
+    domain: ReviewDomain
+
+
 class PersonaOutput(BaseModel):
     """Output schema for both leads and specialists.
 
@@ -99,4 +118,25 @@ class CtoOutput(BaseModel):
     reasoning: str
     trigger_signals: list[str] = Field(default_factory=list)
     unresolved_disagreements: list[CtoUnresolvedDisagreement] = Field(default_factory=list)
+    risk_metadata: RiskMetadata
+
+
+class MonolithicReviewOutput(BaseModel):
+    """Output of the monolithic A/B comparator workflow.
+
+    A single LLM call produces the decision *and* every finding (with
+    domain attribution). Shape mirrors what an A-side CTO would emit,
+    plus a flat `findings` list — A's findings live on individual
+    persona outputs, so they're not directly comparable without this
+    flattening.
+
+    `risk_metadata` is computed deterministically by the workflow runner
+    (same code path as A) so the A/B comparison isolates *only the LLM
+    behavior*.
+    """
+
+    decision: Literal["auto-merge", "request-changes", "escalate-to-human"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str
+    findings: list[FindingWithDomain] = Field(default_factory=list)
     risk_metadata: RiskMetadata

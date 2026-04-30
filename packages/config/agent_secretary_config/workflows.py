@@ -7,6 +7,10 @@ sides import from here so the strings can never drift.
 # Existing PR review pipeline (dispatcher → personas → CTO).
 WORKFLOW_PR_REVIEW = "pr_review"
 
+# Single-agent monolithic PR review — A/B comparator for `pr_review`.
+# Activated as a *shadow task* alongside pr_review when ab mode is enabled.
+WORKFLOW_PR_REVIEW_MONOLITHIC = "pr_review_monolithic"
+
 # Slack-driven, single-agent workflows (ported from legacy debug/fix/issue).
 WORKFLOW_CODE_ANALYZE = "code_analyze"   # legacy: debug
 WORKFLOW_CODE_MODIFY = "code_modify"     # legacy: fix (placeholder)
@@ -14,6 +18,7 @@ WORKFLOW_LINEAR_ISSUE = "linear_issue"   # legacy: issue (placeholder)
 
 ALL_WORKFLOWS: tuple[str, ...] = (
     WORKFLOW_PR_REVIEW,
+    WORKFLOW_PR_REVIEW_MONOLITHIC,
     WORKFLOW_CODE_ANALYZE,
     WORKFLOW_CODE_MODIFY,
     WORKFLOW_LINEAR_ISSUE,
