@@ -12,6 +12,8 @@ dependencies = [
     # Slack channel plugin (Socket Mode + Web client for thread/buttons)
     "slack-sdk>=3.31",
     "aiohttp>=3.10",
+    # Dashboard reads recent traces from Postgres
+    "psycopg[binary]>=3.2",
 ]
 
 [build-system]

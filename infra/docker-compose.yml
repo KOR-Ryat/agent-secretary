@@ -31,6 +31,8 @@ services:
       dockerfile: services/ingress/Dockerfile
     environment:
       REDIS_URL: redis://redis:6379
+      # Dashboard reads pr_trace from postgres
+      DATABASE_URL: postgresql://agent:agent@postgres/agent_secretary
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
@@ -40,6 +42,8 @@ services:
       - "8080:8080"
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
   core:

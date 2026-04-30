@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>agent-secretary · dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #161a22;
+      --panel-2: #1d222c;
+      --border: #2a313d;
+      --fg: #e6e8eb;
+      --fg-muted: #9aa3b2;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --escalate: #f85149;
+      --link: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--fg);
+    }
+    header {
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; gap: 16px;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header .sub { color: var(--fg-muted); font-size: 13px; }
+    main { display: grid; grid-template-columns: 480px 1fr; height: calc(100vh - 56px); }
+    .left { border-right: 1px solid var(--border); overflow-y: auto; }
+    .right { padding: 20px; overflow-y: auto; }
+    .banner {
+      background: var(--panel); border-bottom: 1px solid var(--border);
+      padding: 10px 16px; color: var(--warn); font-size: 13px;
+    }
+    .row {
+      display: block; padding: 12px 16px;
+      border-bottom: 1px solid var(--border); cursor: pointer;
+      text-decoration: none; color: inherit;
+    }
+    .row:hover { background: var(--panel); }
+    .row.selected { background: var(--panel-2); }
+    .row .top {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 4px;
+    }
+    .row .workflow {
+      font-family: ui-monospace, "SF Mono", monospace; font-size: 11px;
+      padding: 2px 6px; border-radius: 4px; background: var(--panel-2);
+      color: var(--fg-muted);
+    }
+    .row .decision {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .decision.auto-merge { background: rgba(63,185,80,.15); color: var(--ok); }
+    .decision.escalate-to-human { background: rgba(248,81,73,.15); color: var(--escalate); }
+    .decision.request-changes { background: rgba(210,153,34,.15); color: var(--warn); }
+    .decision.none { background: var(--panel-2); color: var(--fg-muted); }
+    .row .summary { color: var(--fg); font-size: 13px; line-height: 1.4; }
+    .row .meta {
+      display: flex; gap: 12px; font-size: 11px; color: var(--fg-muted);
+      margin-top: 4px;
+    }
+    .empty { padding: 40px; text-align: center; color: var(--fg-muted); }
+    h2 { font-size: 15px; margin: 0 0 8px; }
+    section.detail { margin-bottom: 20px; }
+    section.detail h2 { color: var(--fg-muted); font-weight: 500; }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; overflow-x: auto;
+      font-size: 12px; line-height: 1.5;
+    }
+    .summary-rendered {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; white-space: pre-wrap;
+      font-size: 13px; line-height: 1.5;
+    }
+    button.refresh {
+      background: var(--panel-2); color: var(--fg); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    button.refresh:hover { background: var(--panel); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>agent-secretary</h1>
+    <span class="sub">trace dashboard</span>
+    <button class="refresh" onclick="loadList()">↻ refresh</button>
+  </header>
+  <div id="banner"></div>
+  <main>
+    <div class="left" id="list"><div class="empty">로딩 중…</div></div>
+    <div class="right" id="detail"><div class="empty">왼쪽에서 항목을 선택하세요.</div></div>
+  </main>
+
+  <script>
+    let selectedTaskId = null;
+
+    function decisionClass(d) {
+      if (!d) return 'none';
+      return ['auto-merge', 'escalate-to-human', 'request-changes'].includes(d) ? d : 'none';
+    }
+
+    function fmtTime(s) {
+      if (!s) return '';
+      const d = new Date(s);
+      return d.toLocaleString('ko-KR', { hour12: false });
+    }
+
+    async function loadList() {
+      const list = document.getElementById('list');
+      const banner = document.getElementById('banner');
+      try {
+        const res = await fetch('/api/traces?limit=100');
+        if (res.status === 503) {
+          banner.className = 'banner';
+          banner.textContent = '⚠️ DATABASE_URL 미설정 — 트레이스를 불러올 수 없습니다.';
+          list.innerHTML = '<div class="empty">DB 연결 없음</div>';
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        banner.textContent = '';
+        const data = await res.json();
+        if (!data.items.length) {
+          list.innerHTML = '<div class="empty">아직 트레이스가 없습니다.</div>';
+          return;
+        }
+        list.innerHTML = data.items.map(item => {
+          const d = item.decision;
+          const dc = decisionClass(d);
+          const summary = (item.summary_markdown || '').slice(0, 160);
+          const sel = item.task_id === selectedTaskId ? ' selected' : '';
+          return `
+            <a class="row${sel}" data-id="${item.task_id}" onclick="loadDetail('${item.task_id}'); return false;" href="#${item.task_id}">
+              <div class="top">
+                <span class="workflow">${item.workflow}</span>
+                <span class="decision ${dc}">${d || '—'}</span>
+              </div>
+              <div class="summary">${escapeHtml(summary)}${item.summary_markdown && item.summary_markdown.length > 160 ? '…' : ''}</div>
+              <div class="meta">
+                <span>${item.source_channel}</span>
+                <span>${fmtTime(item.completed_at || item.created_at)}</span>
+                ${item.confidence ? `<span>conf ${(+item.confidence).toFixed(2)}</span>` : ''}
+              </div>
+            </a>`;
+        }).join('');
+      } catch (e) {
+        list.innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function loadDetail(taskId) {
+      selectedTaskId = taskId;
+      document.querySelectorAll('.row').forEach(r => r.classList.toggle('selected', r.dataset.id === taskId));
+      const detail = document.getElementById('detail');
+      detail.innerHTML = '<div class="empty">로딩 중…</div>';
+      try {
+        const res = await fetch('/api/traces/' + encodeURIComponent(taskId));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        detail.innerHTML = renderDetail(data);
+      } catch (e) {
+        detail.innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderDetail(t) {
+      const sec = (title, content) => `
+        <section class="detail">
+          <h2>${title}</h2>
+          ${content}
+        </section>`;
+      const code = obj => obj == null
+        ? '<div class="empty" style="text-align:left;padding:8px 0">(없음)</div>'
+        : `<pre>${escapeHtml(JSON.stringify(obj, null, 2))}</pre>`;
+      return [
+        sec('Task',
+          `<pre>${escapeHtml(JSON.stringify({
+            task_id: t.task_id,
+            event_id: t.event_id,
+            workflow: t.workflow,
+            source_channel: t.source_channel,
+            created_at: t.created_at,
+            completed_at: t.completed_at,
+          }, null, 2))}</pre>`),
+        sec('Summary',
+          t.summary_markdown
+            ? `<div class="summary-rendered">${escapeHtml(t.summary_markdown)}</div>`
+            : '<div class="empty" style="text-align:left;padding:8px 0">(없음)</div>'),
+        sec('CTO output', code(t.cto_output)),
+        sec('Risk metadata', code(t.risk_metadata)),
+        sec('Dispatcher output', code(t.dispatcher_output)),
+        sec('Lead outputs', code(t.lead_outputs)),
+        sec('Specialist outputs', code(t.specialist_outputs)),
+        sec('Human decision', code(t.human_decision)),
+        sec('PR / context metadata', code(t.pr_metadata)),
+      ].join('');
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+
+    loadList();
+    setInterval(loadList, 30000);  // refresh every 30s
+  </script>
+</body>
+</html>
