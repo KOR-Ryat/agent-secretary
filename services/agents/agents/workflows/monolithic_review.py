@@ -43,7 +43,10 @@ class MonolithicReviewError(RuntimeError):
 class MonolithicReviewRunner:
     def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
         self._client = client
-        self._model = settings.model_default  # same model class as A's leads
+        # Match A's *decision maker* (the CTO is Opus). Otherwise the A/B
+        # comparison would conflate persona structure with model capability —
+        # we want to isolate the "does persona separation help?" question.
+        self._model = settings.model_cto
         prompts_dir = Path(settings.prompts_dir)
         self._system_prompt = (
             prompts_dir / "workflows" / "pr_review_monolithic.md"
