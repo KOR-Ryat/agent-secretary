@@ -13,6 +13,7 @@ from fastapi import APIRouter, FastAPI
 from redis.asyncio import Redis
 
 from ingress.config import Settings
+from ingress.dashboard.reports import register_reports
 from ingress.dashboard.routes import register_dashboard
 from ingress.dashboard.traces import TraceReader
 from ingress.logging import configure_logging, get_logger
@@ -89,6 +90,7 @@ def _build_app(settings: Settings) -> FastAPI:
         return {"status": "ok"}
 
     register_dashboard(app, trace_reader)
+    register_reports(app, trace_reader)
 
     return app
 

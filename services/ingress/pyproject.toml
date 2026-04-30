@@ -14,6 +14,8 @@ dependencies = [
     "aiohttp>=3.10",
     # Dashboard reads recent traces from Postgres
     "psycopg[binary]>=3.2",
+    # /static/reports/{task_id} renders detail_markdown server-side
+    "markdown>=3.6",
 ]
 
 [build-system]
