@@ -14,9 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_secretary_config import (
-    DEPENDENCY_FILE_MARKERS,
-    HIGH_RISK_PATH_TAGS,
-    TEST_FILE_MARKERS,
+    resolve_rules,
+    review_rules_for,
 )
 from agent_secretary_schemas import PersonaOutput
 from agent_secretary_schemas.personas import RiskMetadata
@@ -45,7 +44,12 @@ class PrReviewRunner:
 
     async def run(self, workflow_input: dict) -> dict:
         pr = workflow_input.get("pr", {})
-        log.info("workflow.pr_review.start", pr_title=pr.get("title", "")[:60])
+        repo_full_name = (workflow_input.get("repo") or {}).get("full_name")
+        log.info(
+            "workflow.pr_review.start",
+            pr_title=pr.get("title", "")[:60],
+            repo=repo_full_name,
+        )
 
         # Stage 1: dispatcher
         activation = await self._dispatcher.call({"pr": pr})
@@ -70,7 +74,7 @@ class PrReviewRunner:
         log.info("workflow.leads.complete", count=len(lead_outputs))
 
         # Stage 4: CTO
-        risk_metadata = _compute_risk_metadata(pr)
+        risk_metadata = _compute_risk_metadata(pr, repo_full_name)
         cto_output = await self._cto.call(
             {
                 "pr": pr,
@@ -165,17 +169,22 @@ class PrReviewRunner:
         )
 
 
-def _compute_risk_metadata(pr: dict[str, Any]) -> RiskMetadata:
+def _compute_risk_metadata(
+    pr: dict[str, Any],
+    repo_full_name: str | None = None,
+) -> RiskMetadata:
     """Deterministic risk metadata.
 
-    Pattern lists are imported from `agent_secretary_config.review_rules` —
-    per-codebase tuning happens there, not here.
+    Pattern lists come from `agent_secretary_config` — per-repo overrides
+    declared in `service_map.SERVICE_MAP[*].repos[*].review_rules` take
+    precedence over module defaults; absent fields fall back.
     """
+    rules = resolve_rules(review_rules_for(repo_full_name))
     changed_files = pr.get("changed_files") or []
 
     high_risk_paths_touched: list[str] = []
     for path in changed_files:
-        for tag in HIGH_RISK_PATH_TAGS:
+        for tag in rules.high_risk_paths:
             if tag in path and tag not in high_risk_paths_touched:
                 high_risk_paths_touched.append(tag)
 
@@ -185,12 +194,13 @@ def _compute_risk_metadata(pr: dict[str, Any]) -> RiskMetadata:
     test_files = sum(
         1
         for p in changed_files
-        if any(m in p.lower() for m in TEST_FILE_MARKERS)
+        if any(m in p.lower() for m in rules.test_file_patterns)
     )
     test_ratio = test_files / len(changed_files) if changed_files else 0.0
 
     dependency_changes = any(
-        any(marker in p for marker in DEPENDENCY_FILE_MARKERS) for p in changed_files
+        any(marker in p for marker in rules.dependency_file_patterns)
+        for p in changed_files
     )
 
     return RiskMetadata(

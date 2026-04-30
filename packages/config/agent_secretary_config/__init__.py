@@ -3,6 +3,9 @@ from agent_secretary_config.review_rules import (
     DEPENDENCY_FILE_MARKERS,
     HIGH_RISK_PATH_TAGS,
     TEST_FILE_MARKERS,
+    ResolvedReviewRules,
+    ReviewRules,
+    resolve_rules,
 )
 from agent_secretary_config.service_map import (
     SERVICE_MAP,
@@ -11,7 +14,9 @@ from agent_secretary_config.service_map import (
     Repo,
     Service,
     all_repos,
+    find_repo,
     resolve_channel,
+    review_rules_for,
 )
 from agent_secretary_config.streams import (
     MAX_DELIVERIES,
@@ -54,8 +59,13 @@ __all__ = [
     "Channel",
     "ChannelResolution",
     "Repo",
+    "ResolvedReviewRules",
+    "ReviewRules",
     "Service",
     "all_repos",
     "classify_slack_text",
+    "find_repo",
     "resolve_channel",
+    "resolve_rules",
+    "review_rules_for",
 ]

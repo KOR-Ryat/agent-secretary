@@ -12,9 +12,10 @@ code changes — review them as you would any data file.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent_secretary_config.channel_names import CHANNEL_NAMES
+from agent_secretary_config.review_rules import ReviewRules
 
 
 class Repo(BaseModel, frozen=True):
@@ -24,6 +25,10 @@ class Repo(BaseModel, frozen=True):
     production: str
     staging: str
     dev: str
+    # Per-repo review heuristic overrides. Empty fields fall back to the
+    # module defaults in `review_rules.py`. Populate when a codebase's
+    # conventions diverge — e.g. auth at `server/src/modules/auth/`.
+    review_rules: ReviewRules = Field(default_factory=ReviewRules)
 
     @property
     def short_name(self) -> str:
@@ -165,3 +170,25 @@ def all_repos() -> tuple[Repo, ...]:
         for repo in service.repos:
             seen.setdefault(repo.name, repo)
     return tuple(seen.values())
+
+
+def find_repo(repo_full_name: str) -> Repo | None:
+    """Look up a repo by its `owner/name`. None for unknown repos."""
+    for service in SERVICE_MAP.values():
+        for repo in service.repos:
+            if repo.name == repo_full_name:
+                return repo
+    return None
+
+
+def review_rules_for(repo_full_name: str | None) -> ReviewRules:
+    """Per-repo `ReviewRules` overrides; empty `ReviewRules()` for unknown repos.
+
+    Use `resolve_rules(...)` from `review_rules.py` to merge with module
+    defaults before applying.
+    """
+    if repo_full_name:
+        repo = find_repo(repo_full_name)
+        if repo is not None:
+            return repo.review_rules
+    return ReviewRules()

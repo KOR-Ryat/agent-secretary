@@ -12,6 +12,7 @@ Two workflow shapes today:
 - [`design.md`](design.md) — PR review system design (personas, dispatcher, CTO, KPIs)
 - [`design_server.md`](design_server.md) — server architecture (4-layer pipeline)
 - [`docs/workspace.md`](docs/workspace.md) — bare repo + worktree setup
+- [`docs/review_rules.md`](docs/review_rules.md) — per-codebase risk-pattern tuning
 - [`prompts/`](prompts/) — system prompts (1 dispatcher + 5 leads + 20 specialists + 1 CTO + 3 workflows)
 
 ## Architecture (4 services + Redis + Postgres)

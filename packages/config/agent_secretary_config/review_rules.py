@@ -1,12 +1,24 @@
 """Heuristic patterns for PR review risk metadata.
 
-These are intentionally simple defaults applied to *any* target codebase.
-Per-codebase tuning is an open task (see design.md §12) — eventually these
-will move behind a per-target config file or env-driven override layer.
+Two layers:
 
-For now they are module-level tuples so the agents service can import
-them directly with no construction overhead.
+  1. Module-level *defaults* that apply to any target codebase. Conservative,
+     generic patterns covering common conventions.
+  2. Per-repo `ReviewRules` attached to each `Repo` in `service_map`.
+     A repo may override any subset of the defaults; unset fields fall back.
+
+The agents service resolves both layers at compute-time via
+`review_rules_for(repo_full_name).resolved()` — see usage in
+`services/agents/agents/workflows/pr_review.py`.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from pydantic import BaseModel
+
+# --- Generic defaults ----------------------------------------------------
 
 # Path prefixes/segments that mark high-risk PR areas. Touching any of
 # these forces the CTO to escalate (see prompts/cto.md hard-rule table).
@@ -31,3 +43,46 @@ DEPENDENCY_FILE_MARKERS: tuple[str, ...] = (
     "go.sum",
     "Cargo",
 )
+
+
+# --- Per-repo overrides --------------------------------------------------
+
+
+class ReviewRules(BaseModel, frozen=True):
+    """Per-repo review heuristics. Empty fields fall back to module defaults.
+
+    Attach to a `Repo` in `SERVICE_MAP` to tune the review pipeline for a
+    given codebase — e.g. viv-monorepo's auth lives under
+    `server/src/modules/auth/`, not `auth/`.
+    """
+
+    # If non-empty, REPLACES the corresponding default for this repo.
+    high_risk_paths: tuple[str, ...] = ()
+    test_file_patterns: tuple[str, ...] = ()
+    dependency_file_patterns: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ResolvedReviewRules:
+    """Effective rule set after merging per-repo overrides with defaults."""
+
+    high_risk_paths: tuple[str, ...]
+    test_file_patterns: tuple[str, ...]
+    dependency_file_patterns: tuple[str, ...]
+
+
+def resolve_rules(rules: ReviewRules | None) -> ResolvedReviewRules:
+    """Merge per-repo `rules` with module defaults.
+
+    For each field: if the override is non-empty, use it; otherwise fall
+    back to the default. `None` is treated the same as an empty
+    `ReviewRules()`.
+    """
+    rules = rules or ReviewRules()
+    return ResolvedReviewRules(
+        high_risk_paths=rules.high_risk_paths or HIGH_RISK_PATH_TAGS,
+        test_file_patterns=rules.test_file_patterns or TEST_FILE_MARKERS,
+        dependency_file_patterns=(
+            rules.dependency_file_patterns or DEPENDENCY_FILE_MARKERS
+        ),
+    )
