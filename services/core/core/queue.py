@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from agent_secretary_config import (
+    STREAM_RAW_EVENTS,
+    STREAM_RAW_EVENTS_DLQ,
+    STREAM_TASKS,
+)
 from agent_secretary_schemas import RawEvent, TaskSpec
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
-
-STREAM_RAW_EVENTS = "raw_events"
-STREAM_TASKS = "tasks"
-STREAM_RAW_EVENTS_DLQ = "raw_events_dlq"
-
-MAX_DELIVERIES = 3
 
 
 class CoreQueue:
@@ -77,14 +76,4 @@ class CoreQueue:
         await self._redis.aclose()
 
 
-def serialize_raw_event(event: RawEvent) -> str:
-    return event.model_dump_json()
-
-
-__all__ = [
-    "MAX_DELIVERIES",
-    "STREAM_RAW_EVENTS",
-    "STREAM_TASKS",
-    "CoreQueue",
-    "serialize_raw_event",
-]
+__all__ = ["CoreQueue"]

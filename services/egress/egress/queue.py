@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from agent_secretary_config import STREAM_RESULTS, STREAM_RESULTS_DLQ
 from agent_secretary_schemas import ResultEvent
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
-
-STREAM_RESULTS = "results"
-STREAM_RESULTS_DLQ = "results_dlq"
-
-MAX_DELIVERIES = 3
 
 
 class EgressQueue:
@@ -72,4 +68,4 @@ class EgressQueue:
         await self._redis.aclose()
 
 
-__all__ = ["MAX_DELIVERIES", "STREAM_RESULTS", "EgressQueue"]
+__all__ = ["EgressQueue"]

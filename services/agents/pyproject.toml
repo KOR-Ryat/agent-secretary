@@ -4,6 +4,7 @@ version = "0.0.0"
 requires-python = ">=3.11"
 dependencies = [
     "agent-secretary-schemas",
+    "agent-secretary-config",
     "anthropic>=0.40",
     "redis>=5.0",
     "psycopg[binary]>=3.2",

@@ -1,9 +1,8 @@
 """Redis Streams publisher for raw_events."""
 
+from agent_secretary_config import STREAM_RAW_EVENTS
 from agent_secretary_schemas import RawEvent
 from redis.asyncio import Redis
-
-STREAM_RAW_EVENTS = "raw_events"
 
 
 class EventPublisher:

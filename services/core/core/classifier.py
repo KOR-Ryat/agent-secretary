@@ -9,9 +9,8 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
+from agent_secretary_config import WORKFLOW_PR_REVIEW
 from agent_secretary_schemas import RawEvent, TaskSpec
-
-WORKFLOW_PR_REVIEW = "pr_review"
 
 
 class UnclassifiedEvent(Exception):

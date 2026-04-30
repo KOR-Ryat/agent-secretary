@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
+from agent_secretary_config import MAX_DELIVERIES
 from agent_secretary_schemas import ResultEvent
 from redis.asyncio import Redis
 
@@ -17,7 +18,7 @@ from egress.logging import configure_logging, get_logger
 from egress.plugins._base import ChannelDeliverer
 from egress.plugins.cli import CliDeliverer
 from egress.plugins.github import GithubDeliverer
-from egress.queue import MAX_DELIVERIES, EgressQueue
+from egress.queue import EgressQueue
 
 log = get_logger("egress.main")
 

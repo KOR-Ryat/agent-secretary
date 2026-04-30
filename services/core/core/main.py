@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import asyncio
 
+from agent_secretary_config import MAX_DELIVERIES
 from redis.asyncio import Redis
 
 from core.classifier import UnclassifiedEvent, classify
 from core.config import Settings
 from core.logging import configure_logging, get_logger
-from core.queue import MAX_DELIVERIES, CoreQueue
+from core.queue import CoreQueue
 
 log = get_logger("core.main")
 

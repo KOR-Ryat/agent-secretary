@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from agent_secretary_config import (
+    STREAM_RESULTS,
+    STREAM_TASKS,
+    STREAM_TASKS_DLQ,
+)
 from agent_secretary_schemas import ResultEvent, TaskSpec
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
-
-STREAM_TASKS = "tasks"
-STREAM_RESULTS = "results"
-STREAM_TASKS_DLQ = "tasks_dlq"
-
-MAX_DELIVERIES = 3
 
 
 class AgentsQueue:
@@ -76,9 +75,4 @@ class AgentsQueue:
         await self._redis.aclose()
 
 
-__all__ = [
-    "MAX_DELIVERIES",
-    "STREAM_RESULTS",
-    "STREAM_TASKS",
-    "AgentsQueue",
-]
+__all__ = ["AgentsQueue"]

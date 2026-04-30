@@ -10,13 +10,14 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
+from agent_secretary_config import MAX_DELIVERIES
 from agent_secretary_schemas import ResultEvent
 from anthropic import AsyncAnthropic
 from redis.asyncio import Redis
 
 from agents.config import Settings
 from agents.logging import configure_logging, get_logger
-from agents.queue import MAX_DELIVERIES, AgentsQueue
+from agents.queue import AgentsQueue
 from agents.runner import UnknownWorkflowError, WorkflowRunner
 from agents.summary import render_summary_markdown
 from agents.trace import make_trace_store

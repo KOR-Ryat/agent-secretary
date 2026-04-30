@@ -13,6 +13,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from agent_secretary_config import (
+    DEPENDENCY_FILE_MARKERS,
+    HIGH_RISK_PATH_TAGS,
+    TEST_FILE_MARKERS,
+)
 from agent_secretary_schemas import PersonaOutput
 from agent_secretary_schemas.personas import RiskMetadata
 from anthropic import AsyncAnthropic
@@ -161,37 +166,36 @@ class PrReviewRunner:
 
 
 def _compute_risk_metadata(pr: dict[str, Any]) -> RiskMetadata:
-    """Deterministic risk metadata. PoC heuristic only.
+    """Deterministic risk metadata.
 
-    These triggers are intentionally simple — they should be tuned per
-    target codebase (see design.md §12).
+    Pattern lists are imported from `agent_secretary_config.review_rules` —
+    per-codebase tuning happens there, not here.
     """
+    changed_files = pr.get("changed_files") or []
+
     high_risk_paths_touched: list[str] = []
-    for path in pr.get("changed_files", []) or []:
-        for tag in ("auth/", "payments/", "migrations/", "billing/", "secrets/"):
+    for path in changed_files:
+        for tag in HIGH_RISK_PATH_TAGS:
             if tag in path and tag not in high_risk_paths_touched:
                 high_risk_paths_touched.append(tag)
 
     stats = pr.get("diff_stats") or {}
-    additions = int(stats.get("additions", 0))
-    deletions = int(stats.get("deletions", 0))
+    lines_changed = int(stats.get("additions", 0)) + int(stats.get("deletions", 0))
 
     test_files = sum(
         1
-        for p in (pr.get("changed_files") or [])
-        if "test" in p.lower() or "spec" in p.lower()
+        for p in changed_files
+        if any(m in p.lower() for m in TEST_FILE_MARKERS)
     )
-    total_files = len(pr.get("changed_files") or [])
-    test_ratio = test_files / total_files if total_files else 0.0
+    test_ratio = test_files / len(changed_files) if changed_files else 0.0
 
     dependency_changes = any(
-        any(marker in p for marker in ("package.json", "lock", "requirements", "go.sum", "Cargo"))
-        for p in (pr.get("changed_files") or [])
+        any(marker in p for marker in DEPENDENCY_FILE_MARKERS) for p in changed_files
     )
 
     return RiskMetadata(
         high_risk_paths_touched=high_risk_paths_touched,
-        lines_changed=additions + deletions,
+        lines_changed=lines_changed,
         test_ratio=test_ratio,
         dependency_changes=dependency_changes,
     )

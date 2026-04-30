@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 [tool.uv.workspace]
 members = [
     "packages/schemas",
+    "packages/config",
     "services/ingress",
     "services/core",
     "services/agents",
@@ -15,6 +16,7 @@ members = [
 
 [tool.uv.sources]
 agent-secretary-schemas = { workspace = true }
+agent-secretary-config = { workspace = true }
 
 [dependency-groups]
 dev = [

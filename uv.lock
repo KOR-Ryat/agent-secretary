@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "agent-secretary",
     "agent-secretary-agents",
+    "agent-secretary-config",
     "agent-secretary-core",
     "agent-secretary-egress",
     "agent-secretary-ingress",
@@ -46,6 +47,7 @@ name = "agent-secretary-agents"
 version = "0.0.0"
 source = { editable = "services/agents" }
 dependencies = [
+    { name = "agent-secretary-config" },
     { name = "agent-secretary-schemas" },
     { name = "anthropic" },
     { name = "psycopg", extra = ["binary"] },
@@ -55,6 +57,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-secretary-config", editable = "packages/config" },
     { name = "agent-secretary-schemas", editable = "packages/schemas" },
     { name = "anthropic", specifier = ">=0.40" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -63,10 +66,16 @@ requires-dist = [
 ]
 
 [[package]]
+name = "agent-secretary-config"
+version = "0.0.0"
+source = { editable = "packages/config" }
+
+[[package]]
 name = "agent-secretary-core"
 version = "0.0.0"
 source = { editable = "services/core" }
 dependencies = [
+    { name = "agent-secretary-config" },
     { name = "agent-secretary-schemas" },
     { name = "redis" },
     { name = "structlog" },
@@ -74,6 +83,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-secretary-config", editable = "packages/config" },
     { name = "agent-secretary-schemas", editable = "packages/schemas" },
     { name = "redis", specifier = ">=5.0" },
     { name = "structlog", specifier = ">=24" },
@@ -84,6 +94,7 @@ name = "agent-secretary-egress"
 version = "0.0.0"
 source = { editable = "services/egress" }
 dependencies = [
+    { name = "agent-secretary-config" },
     { name = "agent-secretary-schemas" },
     { name = "httpx" },
     { name = "redis" },
@@ -92,6 +103,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-secretary-config", editable = "packages/config" },
     { name = "agent-secretary-schemas", editable = "packages/schemas" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "redis", specifier = ">=5.0" },
@@ -103,6 +115,7 @@ name = "agent-secretary-ingress"
 version = "0.0.0"
 source = { editable = "services/ingress" }
 dependencies = [
+    { name = "agent-secretary-config" },
     { name = "agent-secretary-schemas" },
     { name = "fastapi" },
     { name = "redis" },
@@ -112,6 +125,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-secretary-config", editable = "packages/config" },
     { name = "agent-secretary-schemas", editable = "packages/schemas" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "redis", specifier = ">=5.0" },
