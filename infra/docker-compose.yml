@@ -61,7 +61,12 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://agent:agent@postgres/agent_secretary
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
+      # Workspace skill (bare repo + worktree) needs persistent storage + git auth
+      AGENT_WORKSPACE_DIR: /var/agent-workspace
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - agent_workspace:/var/agent-workspace
     depends_on:
       redis:
         condition: service_healthy
@@ -83,3 +88,4 @@ services:
 
 volumes:
   pgdata:
+  agent_workspace:
