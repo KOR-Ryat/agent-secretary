@@ -18,6 +18,7 @@ from egress.logging import configure_logging, get_logger
 from egress.plugins._base import ChannelDeliverer
 from egress.plugins.cli import CliDeliverer
 from egress.plugins.github import GithubDeliverer
+from egress.plugins.slack import SlackDeliverer
 from egress.queue import EgressQueue
 
 log = get_logger("egress.main")
@@ -26,6 +27,7 @@ log = get_logger("egress.main")
 def _build_deliverers(settings: Settings) -> dict[str, ChannelDeliverer]:
     return {
         "github": GithubDeliverer(settings.github_token),
+        "slack": SlackDeliverer(settings.slack_bot_token),
         "cli": CliDeliverer(),
     }
 

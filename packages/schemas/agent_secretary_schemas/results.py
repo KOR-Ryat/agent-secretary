@@ -12,6 +12,7 @@ class ResultEvent(BaseModel):
     workflow: str
     output: dict
     summary_markdown: str
+    detail_markdown: str | None = None  # full report; egress may attach as a file
     response_routing: ResponseRouting
     completed_at: datetime
     trace_url: str | None = None

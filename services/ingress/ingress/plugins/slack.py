@@ -136,6 +136,8 @@ class SlackChannelParser(ChannelParser):
             thread_messages=await self._fetch_thread(channel_id, thread_ts),
         )
         await self._publisher.publish(event_obj)
+        # In-progress feedback; egress swaps this for ✅/❌ when the result lands.
+        await self._react(channel_id, mention_ts, "hourglass_flowing_sand")
         log.info("slack.mention.published", event_id=event_obj.event_id, workflow=workflow)
 
     async def _on_interactive(self, payload: dict) -> None:
@@ -183,9 +185,17 @@ class SlackChannelParser(ChannelParser):
             thread_messages=await self._fetch_thread(channel_id, thread_ts),
         )
         await self._publisher.publish(event_obj)
+        if mention_ts:
+            await self._react(channel_id, mention_ts, "hourglass_flowing_sand")
         log.info("slack.interactive.published", event_id=event_obj.event_id, workflow=workflow)
 
     # --- Slack helpers --------------------------------------------------
+
+    async def _react(self, channel_id: str, ts: str, name: str) -> None:
+        try:
+            await self._web.reactions_add(channel=channel_id, timestamp=ts, name=name)
+        except Exception as e:
+            log.debug("slack.reaction.add_failed", name=name, error=str(e))
 
     async def _fetch_thread(self, channel_id: str, thread_ts: str | None) -> list[dict]:
         if not thread_ts:

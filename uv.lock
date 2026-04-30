@@ -102,8 +102,10 @@ source = { editable = "services/egress" }
 dependencies = [
     { name = "agent-secretary-config" },
     { name = "agent-secretary-schemas" },
+    { name = "aiohttp" },
     { name = "httpx" },
     { name = "redis" },
+    { name = "slack-sdk" },
     { name = "structlog" },
 ]
 
@@ -111,8 +113,10 @@ dependencies = [
 requires-dist = [
     { name = "agent-secretary-config", editable = "packages/config" },
     { name = "agent-secretary-schemas", editable = "packages/schemas" },
+    { name = "aiohttp", specifier = ">=3.10" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "redis", specifier = ">=5.0" },
+    { name = "slack-sdk", specifier = ">=3.31" },
     { name = "structlog", specifier = ">=24" },
 ]
 

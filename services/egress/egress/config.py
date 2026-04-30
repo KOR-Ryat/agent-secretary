@@ -9,6 +9,7 @@ class Settings:
     consumer_group: str
     consumer_name: str
     github_token: str | None
+    slack_bot_token: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -18,4 +19,5 @@ class Settings:
             consumer_group=os.environ.get("EGRESS_CONSUMER_GROUP", "egress"),
             consumer_name=os.environ.get("EGRESS_CONSUMER_NAME", "egress-1"),
             github_token=os.environ.get("GITHUB_TOKEN") or None,
+            slack_bot_token=os.environ.get("SLACK_BOT_TOKEN") or None,
         )
