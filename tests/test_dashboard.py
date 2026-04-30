@@ -101,6 +101,7 @@ def test_api_trace_detail_returns_row():
         "cto_output": {"decision": "auto-merge"},
         "risk_metadata": None,
         "summary_markdown": "ok",
+        "detail_markdown": None,
         "human_decision": None,
         "created_at": datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
         "completed_at": datetime(2026, 4, 30, 12, 0, tzinfo=UTC),

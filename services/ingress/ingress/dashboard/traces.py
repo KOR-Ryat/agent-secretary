@@ -38,7 +38,7 @@ SELECT
     task_id, event_id, workflow, source_channel,
     pr_metadata, dispatcher_output, specialist_outputs,
     lead_outputs, cto_output, risk_metadata,
-    summary_markdown, human_decision,
+    summary_markdown, detail_markdown, human_decision,
     created_at, completed_at
 FROM pr_trace
 WHERE task_id = %s

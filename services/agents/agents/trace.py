@@ -35,10 +35,14 @@ CREATE TABLE IF NOT EXISTS pr_trace (
     cto_output       JSONB,
     risk_metadata    JSONB,
     summary_markdown TEXT,
+    detail_markdown  TEXT,
     human_decision   JSONB,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at     TIMESTAMPTZ
 );
+
+-- Idempotent column adds for tables that already exist from earlier deploys.
+ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS detail_markdown TEXT;
 
 CREATE INDEX IF NOT EXISTS pr_trace_event_id_idx ON pr_trace(event_id);
 CREATE INDEX IF NOT EXISTS pr_trace_workflow_idx ON pr_trace(workflow);
@@ -79,13 +83,13 @@ class TraceStore:
                     task_id, event_id, workflow, source_channel,
                     pr_metadata, dispatcher_output, specialist_outputs,
                     lead_outputs, cto_output, risk_metadata,
-                    summary_markdown, completed_at
+                    summary_markdown, detail_markdown, completed_at
                 )
                 VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s
+                    %s, %s, %s
                 )
                 ON CONFLICT (task_id) DO UPDATE SET
                     dispatcher_output = EXCLUDED.dispatcher_output,
@@ -94,6 +98,7 @@ class TraceStore:
                     cto_output = EXCLUDED.cto_output,
                     risk_metadata = EXCLUDED.risk_metadata,
                     summary_markdown = EXCLUDED.summary_markdown,
+                    detail_markdown = EXCLUDED.detail_markdown,
                     completed_at = EXCLUDED.completed_at
                 """,
                 (
@@ -108,6 +113,7 @@ class TraceStore:
                     json.dumps(output.get("cto_output"), ensure_ascii=False),
                     json.dumps(output.get("risk_metadata"), ensure_ascii=False),
                     result.summary_markdown,
+                    result.detail_markdown,
                     result.completed_at,
                 ),
             )
