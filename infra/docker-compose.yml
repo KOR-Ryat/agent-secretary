@@ -32,6 +32,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8080:8080"
@@ -72,6 +75,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       redis:
