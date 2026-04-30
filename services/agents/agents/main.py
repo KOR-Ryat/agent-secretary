@@ -75,13 +75,20 @@ async def run() -> None:
                 # else leave un-acked → redis will redeliver
                 continue
 
+            # Workflows may opt in to providing their own summary/detail
+            # (e.g., code_analyze → 메시지/파일). Otherwise the pr_review
+            # markdown renderer takes over.
+            summary = output.get("summary_markdown") or render_summary_markdown(output)
+            detail = output.get("detail_markdown")
+
             result = ResultEvent(
                 result_id=str(uuid.uuid4()),
                 task_id=task.task_id,
                 event_id=task.event_id,
                 workflow=task.workflow,
                 output=output,
-                summary_markdown=render_summary_markdown(output),
+                summary_markdown=summary,
+                detail_markdown=detail,
                 response_routing=task.response_routing,
                 completed_at=datetime.now(UTC),
             )

@@ -76,6 +76,10 @@ class WorkspaceManager:
         self._settings = settings
 
     @property
+    def workspace_dir(self) -> Path:
+        return self._settings.workspace_dir
+
+    @property
     def repos_dir(self) -> Path:
         return self._settings.workspace_dir / "repos"
 
