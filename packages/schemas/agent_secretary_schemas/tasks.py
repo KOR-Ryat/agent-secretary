@@ -12,3 +12,11 @@ class TaskSpec(BaseModel):
     workflow_input: dict
     response_routing: ResponseRouting
     created_at: datetime
+    shadow: bool = False
+    """Backstage tasks: trace-only, no result published.
+
+    When True the agents service writes the trace row but skips
+    `publish_result()` — the egress channel never sees this task. Used
+    by the persona A/B comparator (issue #2) and other research-only
+    workflows that shouldn't surface to end users.
+    """

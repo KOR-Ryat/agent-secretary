@@ -110,6 +110,18 @@ async def run() -> None:
                 source_channel=task.response_routing.primary.channel,
             )
 
+            if task.shadow:
+                # Trace-only — no egress publish. Used by A/B comparator
+                # tasks etc. so the user only sees the primary workflow.
+                await queue.ack(message_id)
+                log.info(
+                    "agents.result.shadow",
+                    task_id=task.task_id,
+                    workflow=task.workflow,
+                    decision=output.get("cto_output", {}).get("decision"),
+                )
+                continue
+
             await queue.publish_result(result)
             await queue.ack(message_id)
             log.info(
