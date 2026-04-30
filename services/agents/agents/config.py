@@ -25,7 +25,7 @@ class Settings:
             raise RuntimeError("ANTHROPIC_API_KEY is required")
         return cls(
             redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379"),
-            database_url=os.environ.get("DATABASE_URL"),
+            database_url=os.environ.get("DATABASE_URL") or None,
             anthropic_api_key=api_key,
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
             consumer_group=os.environ.get("AGENTS_CONSUMER_GROUP", "agents"),
