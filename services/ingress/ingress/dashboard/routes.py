@@ -1,11 +1,16 @@
 """Dashboard FastAPI routes.
 
-  - GET  /              → static index.html
+  - GET  /              → dashboard index.html (inline CSS/JS, no assets)
   - GET  /api/traces    → recent traces (list, paginated)
   - GET  /api/traces/{task_id} → full trace detail
 
 If `DATABASE_URL` is unset (e.g. dev without Postgres), `/` still serves
 the HTML but the API endpoints respond 503 — the UI displays a banner.
+
+The `/static/` URL prefix is intentionally NOT mounted here — it's
+reserved for cross-feature served content (e.g. `/static/reports/{id}`
+for rendered workflow reports — see issue #3). The dashboard SPA is
+self-contained (inline styles + script) so no asset mount is needed.
 """
 
 from __future__ import annotations
@@ -15,14 +20,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from ingress.dashboard.traces import TraceReader
 from ingress.logging import get_logger
 
 log = get_logger("ingress.dashboard.routes")
 
-_STATIC_DIR = Path(__file__).parent / "static"
+_INDEX_HTML = Path(__file__).parent / "index.html"
 
 
 def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
@@ -30,7 +34,7 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
 
     @router.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(_STATIC_DIR / "index.html", media_type="text/html")
+        return FileResponse(_INDEX_HTML, media_type="text/html")
 
     @router.get("/api/traces")
     async def list_traces(
@@ -56,11 +60,6 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
         return JSONResponse(_serialize(row))
 
     app.include_router(router)
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(_STATIC_DIR)),
-        name="dashboard-static",
-    )
 
 
 def _serialize(row: dict) -> dict:
