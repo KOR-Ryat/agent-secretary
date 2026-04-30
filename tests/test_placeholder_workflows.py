@@ -30,11 +30,12 @@ async def test_linear_issue_placeholder_returns_message_and_detail():
 
 
 @pytest.mark.asyncio
-async def test_runner_dispatches_placeholders(monkeypatch):
+async def test_runner_dispatches_placeholders(monkeypatch, tmp_path):
     """WorkflowRunner routes the placeholder workflows without invoking an LLM."""
     import os
 
     os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
+    monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from pathlib import Path
 

@@ -70,6 +70,21 @@ def test_slug_replaces_slashes_and_spaces():
     assert _slug("main") == "main"
 
 
+def test_from_env_requires_explicit_workspace_dir(monkeypatch):
+    """No silent fallback to ~/agent-workspace. Misconfiguration must fail loud."""
+    monkeypatch.delenv("AGENT_WORKSPACE_DIR", raising=False)
+    with pytest.raises(RuntimeError, match="AGENT_WORKSPACE_DIR is required"):
+        WorkspaceSettings.from_env()
+
+
+def test_from_env_uses_explicit_value(monkeypatch, tmp_path):
+    monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    s = WorkspaceSettings.from_env()
+    assert s.workspace_dir == tmp_path / "ws"
+    assert s.github_token is None
+
+
 @pytest.mark.asyncio
 async def test_mount_and_cleanup_around_real_branches(
     workspace: WorkspaceManager,

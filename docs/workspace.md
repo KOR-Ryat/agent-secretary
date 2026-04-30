@@ -24,10 +24,10 @@ $AGENT_WORKSPACE_DIR/
 
 ## 2. 환경변수
 
-| 변수 | 의미 | 기본값 |
+| 변수 | 의무 | 의미 |
 |---|---|---|
-| `AGENT_WORKSPACE_DIR` | 워크스페이스 루트 | `~/agent-workspace` (로컬), `/var/agent-workspace` (docker) |
-| `GITHUB_TOKEN` | bare clone 시 URL 에 주입되는 토큰 | (없음 — public repo 만 가능) |
+| `AGENT_WORKSPACE_DIR` | **필수** | 워크스페이스 루트의 절대경로. 미설정 시 `WorkspaceSettings.from_env()` 가 명시적으로 RuntimeError 를 던진다 — 코드 내 fallback 없음. 로컬은 `.env` 에, docker 는 `docker-compose.yml` 에 (현재 컨테이너 내부 `/var/agent-workspace`). |
+| `GITHUB_TOKEN` | 선택 | bare clone 시 URL 에 주입되는 토큰. `gh auth setup-git` 으로 git credential helper 를 등록한 경우 미설정 가능. |
 
 도커 환경에서는 `infra/docker-compose.yml` 의 `agents` 서비스에 `agent_workspace` 볼륨이 마운트되며, 동일 경로가 `AGENT_WORKSPACE_DIR` 로 노출된다.
 

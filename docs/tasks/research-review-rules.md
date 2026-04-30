@@ -25,7 +25,7 @@ You need:
 3. **A research worktree per repo** mounted on the production branch (read-only inspection). Skip the fetch if you don't have token access — the bare clones are recent enough for static directory inspection:
 
 ```bash
-export AGENT_WORKSPACE_DIR=${AGENT_WORKSPACE_DIR:-~/agent-workspace}
+: "${AGENT_WORKSPACE_DIR:?must be set; export it from .env (e.g. /home/you/workspace/agent-workspace)}"
 FETCH_FIRST=${FETCH_FIRST:-0}   # set to 1 if you have token access and want latest
 
 # Production branch per repo (from service_map.py SERVICE_MAP):

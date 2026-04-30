@@ -48,13 +48,14 @@ class WorkspaceSettings:
 
     @classmethod
     def from_env(cls) -> WorkspaceSettings:
+        raw = os.environ.get("AGENT_WORKSPACE_DIR")
+        if not raw:
+            raise RuntimeError(
+                "AGENT_WORKSPACE_DIR is required. Set it in .env (local) or "
+                "docker-compose env (prod). See docs/workspace.md."
+            )
         return cls(
-            workspace_dir=Path(
-                os.environ.get(
-                    "AGENT_WORKSPACE_DIR",
-                    str(Path.home() / "agent-workspace"),
-                )
-            ).expanduser(),
+            workspace_dir=Path(raw).expanduser(),
             github_token=os.environ.get("GITHUB_TOKEN") or None,
         )
 

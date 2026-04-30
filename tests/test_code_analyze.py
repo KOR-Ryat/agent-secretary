@@ -66,6 +66,7 @@ def _slack_workflow_input() -> dict:
 async def test_code_analyze_returns_summary_and_detail(monkeypatch, tmp_path):
     """Happy path: agent returns 메시지/파일, workflow extracts both."""
     os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
+    monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from agents.skills.workspace import WorkspaceManager
     from agents.workflows import code_analyze as ca
@@ -116,8 +117,9 @@ class _FakeResultMessage:
 
 
 @pytest.mark.asyncio
-async def test_code_analyze_no_service_returns_error(monkeypatch):
+async def test_code_analyze_no_service_returns_error(monkeypatch, tmp_path):
     os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
+    monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from agents.workflows import code_analyze as ca
 
