@@ -272,6 +272,102 @@ def test_classifier_rejects_unknown_trigger():
 
 
 @pytest.mark.asyncio
+async def test_pipeline_with_quality_config_separation_specialist():
+    """Source-code PR activates 설정 분리 specialist; quality lead receives its output."""
+    from agents.workflows.pr_review import PrReviewRunner
+    from core.classifier import classify
+
+    event = _build_pr_event(
+        changed_files=["src/clients/scheduler.py"],
+        title="feat: add scheduled-job worker",
+    )
+    task = classify(event)
+
+    dispatcher_with_quality_specialist = {
+        "activated_leads": [
+            {"name": "보안", "tier": 1, "reason": "always-on"},
+            {"name": "품질", "tier": 1, "reason": "always-on"},
+            {"name": "운영", "tier": 1, "reason": "always-on"},
+        ],
+        "activated_specialists": [
+            {
+                "name": "설정 분리",
+                "lead": "품질",
+                "trigger_type": "hard",
+                "trigger_evidence": "src/clients/scheduler.py — Python 소스 변경",
+                "reasoning": "비비즈니스 모듈에 매직 넘버 도입 가능",
+            }
+        ],
+        "skipped_specialists_with_reason": [],
+        "ambiguous_decisions": [],
+        "dispatcher_confidence": 0.92,
+    }
+    config_specialist_output = {
+        "persona": "설정 분리",
+        "domain": "quality",
+        "domain_relevance": 0.85,
+        "self_confidence": 0.8,
+        "findings": [
+            {
+                "severity": "warning",
+                "location": "src/clients/scheduler.py:23",
+                "description": "WORKER_TIMEOUT 매직 넘버. agent_secretary_config 로 이동 권장.",
+                "threat_or_impact": "환경별 튜닝 시 변경 지점이 분산.",
+            }
+        ],
+        "summary": "매직 넘버 1건.",
+    }
+    cto_clean = {
+        "decision": "auto-merge",
+        "confidence": 0.82,
+        "reasoning": "warning 1건 (config 분리 권장) 외 특이사항 없음.",
+        "trigger_signals": [],
+        "unresolved_disagreements": [],
+        "risk_metadata": {
+            "high_risk_paths_touched": [],
+            "lines_changed": 35,
+            "test_ratio": 0.5,
+            "dependency_changes": False,
+        },
+    }
+
+    called: list[str] = []
+
+    async def create(*, model, max_tokens, system, messages):
+        persona = _persona_for_system(system)
+        if persona == "unknown":
+            head = system.lstrip().splitlines()[0]
+            if "설정 분리" in head:
+                persona = "config_separation"
+        called.append(persona)
+        canned = {
+            "dispatcher": dispatcher_with_quality_specialist,
+            "security_lead": _clean_lead("보안 lead", "security"),
+            "quality_lead": _clean_lead("품질 lead", "quality"),
+            "ops_lead": _clean_lead("운영 lead", "ops"),
+            "config_separation": config_specialist_output,
+            "cto": cto_clean,
+        }
+        if persona not in canned:
+            raise AssertionError(f"no canned response for persona={persona!r}")
+        text = _fenced(canned[persona])
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=text)],
+            usage=SimpleNamespace(input_tokens=100, output_tokens=200),
+        )
+
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(side_effect=create))
+    )
+    runner = PrReviewRunner(client, _settings())
+    output = await runner.run(task.workflow_input)
+
+    assert "config_separation" in called
+    assert "quality_lead" in called
+    assert any(s["persona"] == "설정 분리" for s in output["specialist_outputs"])
+
+
+@pytest.mark.asyncio
 async def test_pipeline_with_specialist_activation():
     """Migration PR activates DB·migrations specialist; ops lead receives its output."""
     from agents.workflows.pr_review import PrReviewRunner

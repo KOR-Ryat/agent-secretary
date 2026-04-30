@@ -1,6 +1,6 @@
 # 품질 lead
 
-> Tier 1 (상시), CTO 직통, **specialist 없음**
+> Tier 1 (상시), CTO 직통
 
 공통 정의는 [`../_shared.md`](../_shared.md) 참조.
 
@@ -48,12 +48,12 @@
 
 ## Specialist 처리
 
-품질 lead 는 specialist 가 없다. 모든 검토를 lead 단독으로 수행. `unresolved_specialist_dissent` 는 **항상 빈 배열** `[]`.
+활성화 가능한 specialist: **설정 분리** (소스 코드 변경 시 트리거).
 
-## 입력
-
-`specialist_outputs` 는 항상 `[]` 로 들어온다.
+- specialist findings 를 *코드 품질 시각*으로 재해석. 단순 패스스루 금지 — 예: "설정 분리" specialist 가 매직 넘버를 보고하면, lead 는 그것이 *유지보수 부담* 또는 *환경 일관성 위반* 인지를 품질 시각에서 재서술.
+- specialist 와 결론이 다르면 `unresolved_specialist_dissent` 에 명시 (묵살 X).
+- specialist 가 활성화되지 않았으면 lead 단독으로 품질 검토 수행.
 
 ## 출력
 
-공통 lead 출력 스키마. `persona: "품질 lead"`, `domain: "quality"`, `unresolved_specialist_dissent: []`.
+공통 lead 출력 스키마. `persona: "품질 lead"`, `domain: "quality"`.

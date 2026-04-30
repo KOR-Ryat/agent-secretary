@@ -52,6 +52,8 @@ SPECIALIST_TO_LEAD: dict[str, str] = {
     "사용자 흐름": "제품·UX",
     "접근성": "제품·UX",
     "i18n": "제품·UX",
+    # quality
+    "설정 분리": "품질",
 }
 
 
