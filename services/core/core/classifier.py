@@ -1,11 +1,11 @@
-"""RawEvent → TaskSpec classifier.
+"""RawEvent → list[TaskSpec] classifier.
 
 PoC 단계: trigger 기반 단순 매핑.
-  - PR webhook → pr_review 워크플로우
+  - PR webhook → pr_review (+ pr_review_monolithic shadow when ab_mode)
   - Slack mention/button → code_analyze / code_modify / linear_issue
     (워크플로우는 RawEvent.normalized.workflow 가 지정)
 
-이벤트 1개 → task 1개 (1:1) 만 지원. 이후 task 그래프로 확장 가능.
+대부분의 이벤트는 task 1개. PR 리뷰 + ab 모드일 때만 task 2개 (정상 + shadow).
 """
 
 from __future__ import annotations
@@ -13,7 +13,11 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
-from agent_secretary_config import ALL_WORKFLOWS, WORKFLOW_PR_REVIEW
+from agent_secretary_config import (
+    ALL_WORKFLOWS,
+    WORKFLOW_PR_REVIEW,
+    WORKFLOW_PR_REVIEW_MONOLITHIC,
+)
 from agent_secretary_schemas import RawEvent, TaskSpec
 
 
@@ -21,26 +25,44 @@ class UnclassifiedEvent(Exception):
     """Raised when an event does not match any known workflow."""
 
 
-def classify(event: RawEvent) -> TaskSpec:
+def classify(event: RawEvent, *, ab_mode: bool = False) -> list[TaskSpec]:
     trigger = event.normalized.get("trigger", "")
 
     # GitHub PR / CLI manual → PR review pipeline
     if trigger.startswith("pr_") or trigger == "manual":
-        return _build_pr_review_task(event)
+        tasks = [_build_pr_review_task(event)]
+        if ab_mode:
+            tasks.append(_build_pr_review_monolithic_shadow(event))
+        return tasks
 
     # Slack mention / button → workflow specified in normalized payload
     if trigger in ("slack_mention", "slack_button"):
         workflow = event.normalized.get("workflow")
         if workflow not in ALL_WORKFLOWS:
             raise UnclassifiedEvent(f"unknown slack workflow: {workflow!r}")
-        return _build_slack_task(event, workflow)
+        return [_build_slack_task(event, workflow)]
 
     raise UnclassifiedEvent(f"no workflow matches trigger={trigger!r}")
 
 
 def _build_pr_review_task(event: RawEvent) -> TaskSpec:
+    return _make_task(event, WORKFLOW_PR_REVIEW, _pr_review_input(event))
+
+
+def _build_pr_review_monolithic_shadow(event: RawEvent) -> TaskSpec:
+    """A/B Case B — same input as A, but shadow=True so the result
+    lands in pr_trace without being published to egress."""
+    return _make_task(
+        event,
+        WORKFLOW_PR_REVIEW_MONOLITHIC,
+        _pr_review_input(event),
+        shadow=True,
+    )
+
+
+def _pr_review_input(event: RawEvent) -> dict:
     pr = event.normalized.get("pr", {})
-    workflow_input = {
+    return {
         "pr": {
             "title": pr.get("title", ""),
             "description": pr.get("description", ""),
@@ -54,7 +76,6 @@ def _build_pr_review_task(event: RawEvent) -> TaskSpec:
         },
         "repo": event.normalized.get("repo", {}),
     }
-    return _make_task(event, WORKFLOW_PR_REVIEW, workflow_input)
 
 
 def _build_slack_task(event: RawEvent, workflow: str) -> TaskSpec:
@@ -72,7 +93,13 @@ def _build_slack_task(event: RawEvent, workflow: str) -> TaskSpec:
     return _make_task(event, workflow, workflow_input)
 
 
-def _make_task(event: RawEvent, workflow: str, workflow_input: dict) -> TaskSpec:
+def _make_task(
+    event: RawEvent,
+    workflow: str,
+    workflow_input: dict,
+    *,
+    shadow: bool = False,
+) -> TaskSpec:
     return TaskSpec(
         task_id=_task_id(event.event_id, workflow),
         event_id=event.event_id,
@@ -80,6 +107,7 @@ def _make_task(event: RawEvent, workflow: str, workflow_input: dict) -> TaskSpec
         workflow_input=workflow_input,
         response_routing=event.response_routing,
         created_at=datetime.now(UTC),
+        shadow=shadow,
     )
 
 

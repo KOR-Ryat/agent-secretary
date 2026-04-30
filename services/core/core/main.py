@@ -22,7 +22,11 @@ log = get_logger("core.main")
 async def run() -> None:
     settings = Settings.from_env()
     configure_logging(settings.log_level)
-    log.info("core.starting", redis_url=settings.redis_url)
+    log.info(
+        "core.starting",
+        redis_url=settings.redis_url,
+        ab_mode=settings.pr_review_ab_mode,
+    )
 
     redis = Redis.from_url(settings.redis_url, decode_responses=False)
     queue = CoreQueue(redis, settings.consumer_group, settings.consumer_name)
@@ -39,7 +43,7 @@ async def run() -> None:
                 delivery=delivery,
             )
             try:
-                task = classify(event)
+                tasks = classify(event, ab_mode=settings.pr_review_ab_mode)
             except UnclassifiedEvent as e:
                 if delivery >= MAX_DELIVERIES:
                     log.warning(
@@ -57,14 +61,16 @@ async def run() -> None:
                     await queue.to_dlq(message_id, event.model_dump_json(), str(e))
                 continue
 
-            await queue.publish_task(task)
+            for task in tasks:
+                await queue.publish_task(task)
+                log.info(
+                    "core.task.published",
+                    task_id=task.task_id,
+                    workflow=task.workflow,
+                    shadow=task.shadow,
+                    event_id=event.event_id,
+                )
             await queue.ack(message_id)
-            log.info(
-                "core.task.published",
-                task_id=task.task_id,
-                workflow=task.workflow,
-                event_id=event.event_id,
-            )
     finally:
         await queue.close()
 

@@ -162,7 +162,7 @@ async def test_pipeline_clean_pr_routes_auto_merge():
     from egress.plugins.cli import CliDeliverer
 
     event = _build_pr_event()
-    task = classify(event)
+    [task] = classify(event)
     assert task.workflow == "pr_review"
 
     cto_clean = {
@@ -212,7 +212,7 @@ async def test_pipeline_blocking_finding_routes_escalate():
     from core.classifier import classify
 
     event = _build_pr_event(changed_files=["auth/session.py"])
-    task = classify(event)
+    [task] = classify(event)
 
     security_blocking = {
         "persona": "보안 lead",
@@ -272,6 +272,50 @@ def test_classifier_rejects_unknown_trigger():
         classify(event)
 
 
+def test_classifier_ab_mode_emits_shadow_monolithic_task():
+    from agent_secretary_config import (
+        WORKFLOW_PR_REVIEW,
+        WORKFLOW_PR_REVIEW_MONOLITHIC,
+    )
+    from core.classifier import classify
+
+    event = _build_pr_event()
+
+    # Default off → 1 task.
+    tasks = classify(event)
+    assert [t.workflow for t in tasks] == [WORKFLOW_PR_REVIEW]
+    assert tasks[0].shadow is False
+
+    # ab_mode → 2 tasks: primary visible + monolithic shadow.
+    tasks = classify(event, ab_mode=True)
+    assert [t.workflow for t in tasks] == [
+        WORKFLOW_PR_REVIEW,
+        WORKFLOW_PR_REVIEW_MONOLITHIC,
+    ]
+    assert tasks[0].shadow is False
+    assert tasks[1].shadow is True
+    # Both share event_id (used to JOIN traces for A/B comparison).
+    assert tasks[0].event_id == tasks[1].event_id
+    # But have distinct task_ids (so trace store treats them as separate rows).
+    assert tasks[0].task_id != tasks[1].task_id
+
+
+def test_classifier_ab_mode_does_not_double_slack_workflows():
+    """A/B applies only to PR review. Slack-triggered workflows stay 1:1."""
+    from agent_secretary_config import WORKFLOW_CODE_ANALYZE
+    from core.classifier import classify
+
+    event = _build_pr_event()
+    # Force-make this look like a Slack mention event.
+    event.normalized["trigger"] = "slack_mention"
+    event.normalized["workflow"] = WORKFLOW_CODE_ANALYZE
+
+    tasks = classify(event, ab_mode=True)
+    assert len(tasks) == 1
+    assert tasks[0].workflow == WORKFLOW_CODE_ANALYZE
+    assert tasks[0].shadow is False
+
+
 def test_trace_url_construction():
     """The agents service constructs trace_url only when both report_base_url
     and detail_markdown are present. Verify the formula in isolation."""
@@ -301,7 +345,7 @@ async def test_pipeline_with_quality_config_separation_specialist():
         changed_files=["src/clients/scheduler.py"],
         title="feat: add scheduled-job worker",
     )
-    task = classify(event)
+    [task] = classify(event)
 
     dispatcher_with_quality_specialist = {
         "activated_leads": [
@@ -397,7 +441,7 @@ async def test_pipeline_with_specialist_activation():
         changed_files=["migrations/2026_04_30_add_idx.sql", "src/db.py"],
         title="feat: add user_email index",
     )
-    task = classify(event)
+    [task] = classify(event)
 
     dispatcher_with_specialist = {
         "activated_leads": [

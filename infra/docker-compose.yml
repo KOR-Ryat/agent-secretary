@@ -52,6 +52,9 @@ services:
       dockerfile: services/core/Dockerfile
     environment:
       REDIS_URL: redis://redis:6379
+      # Issue #2 — when true, every PR event also produces a shadow
+      # pr_review_monolithic task for A/B comparison.
+      PR_REVIEW_AB_MODE: ${PR_REVIEW_AB_MODE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       redis:

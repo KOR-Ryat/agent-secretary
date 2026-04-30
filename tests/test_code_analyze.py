@@ -167,7 +167,7 @@ def test_classifier_routes_slack_mention_to_code_analyze():
         ),
     )
 
-    task = classify(event)
+    [task] = classify(event)
     assert task.workflow == WORKFLOW_CODE_ANALYZE
     assert task.workflow_input["channel_id"] == "C99"
     assert task.workflow_input["service_resolution"]["service"] == "viv"
