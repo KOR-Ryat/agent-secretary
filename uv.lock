@@ -69,6 +69,12 @@ requires-dist = [
 name = "agent-secretary-config"
 version = "0.0.0"
 source = { editable = "packages/config" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.7" }]
 
 [[package]]
 name = "agent-secretary-core"
