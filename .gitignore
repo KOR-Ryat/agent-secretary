@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+query-log*.json
+workspace/repos/
+workspace/worktrees/
