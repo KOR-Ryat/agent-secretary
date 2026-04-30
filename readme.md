@@ -1,58 +1,71 @@
 # agent-secretary
 
-Multi-agent PR review and code task automation system. Phase 1 goal: accurately classify PRs into **auto-merge / request-changes / escalate-to-human** without human review (escalating only when needed).
+Multi-agent system for automated code work over Slack and GitHub.
+
+Two workflow shapes today:
+
+- **`pr_review`** — GitHub PR webhook → dispatcher + 5 leads (24 specialists) + CTO → posts markdown summary on the PR. Shadow mode: comments only, no merge/label.
+- **`code_analyze` / `code_modify` / `linear_issue`** — Slack `@mention` → single Claude Agent SDK invocation against bare-repo worktrees → `{메시지, 파일}` reply in thread. `code_modify` and `linear_issue` are placeholders.
 
 ## Documents
 
 - [`design.md`](design.md) — PR review system design (personas, dispatcher, CTO, KPIs)
-- [`design_server.md`](design_server.md) — server architecture (4-layer pipeline: ingress / core / agents / egress)
-- [`prompts/`](prompts/) — system prompts for each persona (1 dispatcher + 5 leads + 19 specialists + 1 CTO)
+- [`design_server.md`](design_server.md) — server architecture (4-layer pipeline)
+- [`docs/workspace.md`](docs/workspace.md) — bare repo + worktree setup
+- [`prompts/`](prompts/) — system prompts (1 dispatcher + 5 leads + 20 specialists + 1 CTO + 3 workflows)
 
 ## Architecture (4 services + Redis + Postgres)
 
 ```
 external ─→ [ingress] ─Q1→ [core] ─Q2→ [agents] ─Q3→ [egress] ─→ external
-              ack             classify    LLM personas + CTO     deliver
+              ack             classify    workflows + agents      deliver
+              dashboard       (pr_review, code_analyze, ...)
 ```
 
-Each service is independently deployable. See `design_server.md` for details.
+Channels (input + output) are plugins:
+
+| Channel | Ingress (input) | Egress (output) |
+|---|---|---|
+| GitHub | webhook (HMAC) | PR comment |
+| Slack | Socket Mode + buttons + thread fetch | message + file (`result.md`) + reactions (⌛/✅/❌) |
+| CLI | HTTP POST | stdout |
+
+Each service is independently deployable. See [`design_server.md`](design_server.md) for details.
 
 ## Layout (uv workspace)
 
 ```
-packages/schemas/                     # shared Pydantic models
+packages/
+  schemas/                        # shared Pydantic models
+  config/                         # streams, workflows, review_rules,
+                                  # service_map (service↔repo↔channel)
 services/
-  ingress/                            # FastAPI webhook receivers
-  core/                               # workflow classifier
-  agents/                             # personas + workflow runners + trace store
-  egress/                             # channel deliverers
-infra/docker-compose.yml              # local dev: redis + postgres + 4 services
-prompts/                              # persona system prompts
-tests/                                # cross-service smoke tests
+  ingress/                        # FastAPI; channel parsers + dashboard
+  core/                           # workflow classifier
+  agents/                         # personas + workflow runners + workspace skill + trace store
+  egress/                         # channel deliverers
+infra/docker-compose.yml          # local dev: redis + postgres + 4 services
+prompts/                          # persona + workflow system prompts
+docs/                             # workspace setup, etc.
+tests/                            # cross-service smoke tests (40 tests)
 ```
 
 ## Local development
 
-Install everything:
-
 ```bash
 uv sync --all-packages
+uv run pytest tests/                    # 40 logical/unit tests, no infra required
 ```
 
-Run tests (logical pipeline smoke; mocks Anthropic, no Redis/Postgres needed):
+Full stack via Docker:
 
 ```bash
-uv run pytest tests/
-```
-
-Run the full stack via Docker:
-
-```bash
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY (required), GITHUB_*, etc.
+cp .env.example .env                    # fill in ANTHROPIC_API_KEY (required) + GITHUB_* + SLACK_*
 cd infra && docker-compose up
+# → ingress on :8080, dashboard on http://localhost:8080/
 ```
 
-Trigger a manual review (CLI plugin → core → agents → egress's CLI deliverer):
+Trigger a manual PR review (CLI plugin):
 
 ```bash
 curl -X POST http://localhost:8080/channels/cli/submit \
@@ -64,20 +77,28 @@ curl -X POST http://localhost:8080/channels/cli/submit \
   }'
 ```
 
+For Slack: configure your Slack app with Socket Mode + `app_mentions:read` / `chat:write` / `files:write` / `reactions:write` / `channels:history`, drop the tokens into `.env`, and `@mention` the bot in a registered channel (see [`packages/config/agent_secretary_config/service_map.py`](packages/config/agent_secretary_config/service_map.py)).
+
 ## Status
 
-Phase 1 (shadow mode): wire-complete. The pipeline ingests PR events, runs the full dispatcher → leads (with specialists) → CTO flow, persists a trace, and posts a markdown summary as a PR comment. **No merge/label/status actions are taken on GitHub.**
+Wire-complete:
 
-Open items (see `design_server.md §11` and `design.md §12`):
+- 4-service pipeline over Redis Streams + DLQs
+- PR review pipeline (dispatcher → 5 leads + specialists → CTO) writing trace to Postgres
+- Slack channel (Socket Mode in, web client + reactions out)
+- `code_analyze` workflow with Claude Agent SDK + bare-repo + worktree isolation
+- Dashboard (`/`) listing recent traces with workflow / decision / summary
+
+Open items:
 
 - GitHub App / webhook tunnel for live PR testing
 - `human_decision` capture webhook + KPI calculation job
-- Activation trigger pattern tuning per target codebase
-- High-risk path list per codebase
+- `code_modify` / `linear_issue` real implementations (placeholders today)
+- Activation trigger / high-risk path tuning per target codebase
 
 ## Models
 
 - CTO: `claude-opus-4-7`
-- Dispatcher / leads / specialists: `claude-sonnet-4-6`
+- Dispatcher / leads / specialists / `code_analyze`: `claude-sonnet-4-6`
 
 Override via `MODEL_CTO` / `MODEL_DEFAULT` env vars.

@@ -385,16 +385,20 @@ volumes:
 - ✅ 1:1 task 매핑 (PoC). 그래프는 나중.
 - ✅ at-least-once 큐 + `task_id` / `result_id` 기반 멱등성
 - ✅ **LLM 모델 매핑** — CTO: `claude-opus-4-7` / 그 외: `claude-sonnet-4-6`
+- ✅ **Slack 채널 플러그인** (Socket Mode + 양방향 어댑터, ingress/egress 분리 유지)
+- ✅ **Workspace skill** — bare repo + worktree (`AGENT_WORKSPACE_DIR`, [`docs/workspace.md`](docs/workspace.md) 참조)
+- ✅ **Slack-트리거 워크플로우** — `code_analyze` (실구현, Claude Agent SDK), `code_modify` / `linear_issue` (placeholder)
+- ✅ **Dashboard** — ingress 안에 정적 HTML + `/api/traces` JSON API. 폴링 기반 (SSE 아님)
 
 ### 미정 (Open)
 
 이 문서가 가정하지 않은, 구현 시작 전 또는 진행 중 결정 필요한 것들:
 
-1. **Trace store 스키마 세부.** `design.md §11` 의 `pr_trace` 를 단일 테이블로 둘지 정규화할지.
-2. **GitHub App vs OAuth.** Phase 1 은 단일 GitHub App 방식 추천 (webhook + 코멘트 게시 권한).
+1. **Trace store 스키마 세부.** `pr_trace` 를 단일 테이블로 두고 있음. Slack 워크플로우 메타데이터(채널/서비스 컨텍스트)를 위한 별도 컬럼 분리는 보류.
+2. **GitHub App vs OAuth.** 운영 환경에서 단일 GitHub App 방식 권장 (webhook + 코멘트 게시 권한).
 3. **CLI 의 결과 수신 메커니즘.** 비동기 파이프라인에 동기 클라이언트가 붙는 방법: polling / SSE / WS.
-4. **워크플로우 버전 관리.** 워크플로우 코드 변경 시 이미 큐에 있는 task 와의 호환성 — Phase 1 은 무시 가능.
-5. **채널 플러그인 통합.** ingress/egress 가 채널별로 코드를 따로 가짐 (현재 가정). 양방향 통합 채널 패키지로 리팩토링은 나중.
+4. **워크플로우 버전 관리.** 워크플로우 코드 변경 시 이미 큐에 있는 task 와의 호환성.
+5. **`linear_issue` / `code_modify` 실구현.** 현재 placeholder. Linear API 통합 + 자동 PR 생성 로직 추가 필요.
 6. **`design.md §12` 의 미정 결정점들.** 그쪽에 정의된 그대로 유효.
 
 ---
