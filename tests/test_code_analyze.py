@@ -33,6 +33,7 @@ def _settings(prompts_dir: Path):
         prompts_dir=str(prompts_dir),
         model_cto="claude-opus-4-7",
         model_default="claude-sonnet-4-6",
+        report_base_url=None,
     )
 
 

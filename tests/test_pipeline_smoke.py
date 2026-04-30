@@ -118,6 +118,7 @@ def _settings():
         prompts_dir=str(PROMPTS_DIR),
         model_cto="claude-opus-4-7",
         model_default="claude-sonnet-4-6",
+        report_base_url=None,
     )
 
 
@@ -269,6 +270,25 @@ def test_classifier_rejects_unknown_trigger():
     event.normalized["trigger"] = "unsupported_thing"
     with pytest.raises(UnclassifiedEvent):
         classify(event)
+
+
+def test_trace_url_construction():
+    """The agents service constructs trace_url only when both report_base_url
+    and detail_markdown are present. Verify the formula in isolation."""
+    base = "https://agent-secretary.example.com"
+    task_id = "abc123"
+
+    # Logic mirror of services/agents/agents/main.py
+    def construct(rb: str | None, detail: str | None) -> str | None:
+        if rb and detail:
+            return f"{rb.rstrip('/')}/static/reports/{task_id}"
+        return None
+
+    assert construct(base, "x") == f"{base}/static/reports/{task_id}"
+    assert construct(base + "/", "x") == f"{base}/static/reports/{task_id}"  # trailing-slash safe
+    assert construct(None, "x") is None
+    assert construct(base, None) is None
+    assert construct(None, None) is None
 
 
 @pytest.mark.asyncio

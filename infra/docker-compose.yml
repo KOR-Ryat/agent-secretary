@@ -68,6 +68,8 @@ services:
       # Workspace skill (bare repo + worktree) needs persistent storage + git auth
       AGENT_WORKSPACE_DIR: /var/agent-workspace
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Report viewer URL — set so Slack messages can link to /static/reports/{task_id}
+      REPORT_BASE_URL: ${REPORT_BASE_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - agent_workspace:/var/agent-workspace

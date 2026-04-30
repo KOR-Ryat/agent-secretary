@@ -13,6 +13,10 @@ class Settings:
     prompts_dir: str
     model_cto: str
     model_default: str
+    report_base_url: str | None
+    """Public base URL of the report viewer, e.g. ``https://agent-secretary.foo.com``.
+    When set, agents fill ``ResultEvent.trace_url`` so egress channels can
+    link to ``{base}/static/reports/{task_id}``."""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -29,4 +33,5 @@ class Settings:
             prompts_dir=os.environ.get("PROMPTS_DIR", "/app/prompts"),
             model_cto=os.environ.get("MODEL_CTO", "claude-opus-4-7"),
             model_default=os.environ.get("MODEL_DEFAULT", "claude-sonnet-4-6"),
+            report_base_url=(os.environ.get("REPORT_BASE_URL") or None),
         )

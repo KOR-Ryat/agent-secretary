@@ -54,6 +54,7 @@ async def test_runner_dispatches_placeholders(monkeypatch, tmp_path):
         prompts_dir=str(repo_root / "prompts"),
         model_cto="claude-opus-4-7",
         model_default="claude-sonnet-4-6",
+        report_base_url=None,
     )
     runner = WorkflowRunner(AsyncAnthropic(api_key="dummy"), s)
 

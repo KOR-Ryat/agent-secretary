@@ -81,6 +81,14 @@ async def run() -> None:
             summary = output.get("summary_markdown") or render_summary_markdown(output)
             detail = output.get("detail_markdown")
 
+            # Public report URL — only when both REPORT_BASE_URL is configured
+            # and the workflow actually produced a detail body to render.
+            trace_url: str | None = None
+            if settings.report_base_url and detail:
+                trace_url = (
+                    f"{settings.report_base_url.rstrip('/')}/static/reports/{task.task_id}"
+                )
+
             result = ResultEvent(
                 result_id=str(uuid.uuid4()),
                 task_id=task.task_id,
@@ -91,6 +99,7 @@ async def run() -> None:
                 detail_markdown=detail,
                 response_routing=task.response_routing,
                 completed_at=datetime.now(UTC),
+                trace_url=trace_url,
             )
 
             # Persist trace before publishing — if trace write fails, we'd
