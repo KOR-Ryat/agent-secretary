@@ -9,6 +9,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "redis>=5.0",
     "structlog>=24",
+    # Slack channel plugin (Socket Mode + Web client for thread/buttons)
+    "slack-sdk>=3.31",
+    "aiohttp>=3.10",
 ]
 
 [build-system]

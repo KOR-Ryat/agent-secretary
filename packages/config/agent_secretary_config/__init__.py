@@ -24,7 +24,12 @@ from agent_secretary_config.streams import (
 )
 from agent_secretary_config.workflows import (
     ALL_WORKFLOWS,
+    SLACK_KEYWORD_TO_WORKFLOW,
+    WORKFLOW_CODE_ANALYZE,
+    WORKFLOW_CODE_MODIFY,
+    WORKFLOW_LINEAR_ISSUE,
     WORKFLOW_PR_REVIEW,
+    classify_slack_text,
 )
 
 __all__ = [
@@ -34,6 +39,7 @@ __all__ = [
     "HIGH_RISK_PATH_TAGS",
     "MAX_DELIVERIES",
     "SERVICE_MAP",
+    "SLACK_KEYWORD_TO_WORKFLOW",
     "STREAM_RAW_EVENTS",
     "STREAM_RAW_EVENTS_DLQ",
     "STREAM_RESULTS",
@@ -41,11 +47,15 @@ __all__ = [
     "STREAM_TASKS",
     "STREAM_TASKS_DLQ",
     "TEST_FILE_MARKERS",
+    "WORKFLOW_CODE_ANALYZE",
+    "WORKFLOW_CODE_MODIFY",
+    "WORKFLOW_LINEAR_ISSUE",
     "WORKFLOW_PR_REVIEW",
     "Channel",
     "ChannelResolution",
     "Repo",
     "Service",
     "all_repos",
+    "classify_slack_text",
     "resolve_channel",
 ]

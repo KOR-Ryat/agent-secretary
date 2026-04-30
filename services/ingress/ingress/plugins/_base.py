@@ -1,24 +1,27 @@
 """Channel parser ABC.
 
-Each channel parser handles input verification and normalization for one channel.
+Each channel parser handles input verification and normalization for one
+channel. Plugins fall into two shapes:
+
+  - **HTTP-driven** (GitHub webhooks, CLI submit): override `register_routes`
+    to mount FastAPI endpoints; `start`/`stop` stay no-op.
+  - **Long-lived connection** (Slack Socket Mode): override `start`/`stop`
+    to manage a background task; `register_routes` may stay no-op.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from agent_secretary_schemas import RawEvent
 from fastapi import APIRouter
 
 
 class ChannelParser(ABC):
     name: str
 
-    @abstractmethod
-    def register_routes(self, router: APIRouter) -> None: ...
+    def register_routes(self, router: APIRouter) -> None:  # noqa: B027 — intentional default no-op
+        """Mount HTTP endpoints. Default no-op for non-HTTP plugins."""
 
-    @abstractmethod
-    async def parse(self, *args, **kwargs) -> RawEvent | None:
-        """Verify and parse a channel-specific request into a RawEvent.
+    async def start(self) -> None:  # noqa: B027 — intentional default no-op
+        """Start any background work (e.g., Socket Mode listener)."""
 
-        Return None if the request is valid but should not produce an event
-        (e.g., GitHub `ping` events, draft PR events we want to ignore).
-        """
+    async def stop(self) -> None:  # noqa: B027 — intentional default no-op
+        """Stop background work; called from FastAPI shutdown."""
