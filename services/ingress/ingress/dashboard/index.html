@@ -150,6 +150,40 @@
     .ops-stat .ops-v { color: var(--fg); font-weight: 600; }
     .ops-stat .ops-sub { color: var(--fg-muted); font-size: 11px; }
     .ops-row .ops-warn { color: var(--warn); font-size: 11px; }
+    .breakdown-tabs {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+    .breakdown-tabs button {
+      background: var(--panel-2); color: var(--fg-muted);
+      border: 1px solid var(--border); padding: 4px 12px;
+      border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .breakdown-tabs button.active {
+      background: var(--bg); color: var(--fg); border-color: var(--link);
+    }
+    .breakdown-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .breakdown-table th, .breakdown-table td {
+      text-align: left; padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .breakdown-table th {
+      color: var(--fg-muted); font-weight: 500; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .breakdown-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .breakdown-table tr:hover { background: var(--panel); }
+    .breakdown-bar {
+      display: inline-block; height: 6px; border-radius: 2px;
+      vertical-align: middle; margin-right: 1px;
+    }
+    .breakdown-bar.auto { background: var(--ok); }
+    .breakdown-bar.changes { background: var(--warn); }
+    .breakdown-bar.escalate { background: var(--escalate); }
+    .breakdown-name {
+      font-family: ui-monospace, "SF Mono", monospace; font-size: 12px;
+    }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -286,7 +320,7 @@
       </div>
       <div class="list-rows" id="list"><div class="empty">로딩 중…</div></div>
     </div>
-    <div class="right" id="detail"><div class="empty">왼쪽에서 항목을 선택하세요.</div></div>
+    <div class="right" id="detail"></div>
   </main>
 
   <script>
@@ -311,6 +345,89 @@
       document.getElementById('f-workflow').value = filters.workflow || '';
       document.getElementById('f-range').value = filters.range || '';
       document.getElementById('search').value = filters.q || '';
+    }
+
+    let breakdownDim = 'repo';
+
+    async function loadBreakdown() {
+      const detail = document.getElementById('detail');
+      // Skip while a trace is selected — don't replace its detail view.
+      if (selectedTaskId) return;
+      try {
+        const res = await fetch('/api/stats/' + (breakdownDim === 'repo' ? 'by_repo' : 'by_channel') + '?range=' + encodeURIComponent(kpiRange));
+        if (res.status === 503) {
+          detail.innerHTML = '<div class="empty">DB 연결 없음</div>';
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        detail.innerHTML = renderBreakdown(data);
+      } catch (e) {
+        detail.innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function setBreakdown(dim) {
+      breakdownDim = dim;
+      loadBreakdown();
+    }
+
+    function renderBreakdown(data) {
+      const rangeLabel = RANGE_LABELS[data.range] || data.range;
+      const tabs = `
+        <div class="breakdown-tabs">
+          <button class="${breakdownDim === 'repo' ? 'active' : ''}" onclick="setBreakdown('repo')">by repo</button>
+          <button class="${breakdownDim === 'channel' ? 'active' : ''}" onclick="setBreakdown('channel')">by channel</button>
+        </div>
+      `;
+      if (!data.items.length) {
+        return `${tabs}<div class="empty">${rangeLabel} 동안 ${data.dimension} 별 데이터가 없습니다.</div>`;
+      }
+      const maxTotal = Math.max(...data.items.map(i => i.total));
+      const rows = data.items.map(i => {
+        const dim = i.dim;
+        // Build proportional stacked bar — relative to the row's total
+        // (so smaller-total rows still show their decision mix clearly).
+        const W = 100;
+        const a = i.auto_merge / i.total * W;
+        const c = i.request_changes / i.total * W;
+        const e = i.escalate / i.total * W;
+        const escRate = (100 * (i.escalation_rate || 0)).toFixed(0) + '%';
+        const conf = i.avg_confidence == null ? '—' : (+i.avg_confidence).toFixed(2);
+        // Rough volume indicator — width ratio against the row with the
+        // most traces. Helps eye-track which rows carry the most weight.
+        const volume = (i.total / maxTotal * 60 + 4).toFixed(0);
+        return `<tr>
+          <td>
+            <div class="breakdown-name">${escapeHtml(dim)}</div>
+            <div style="margin-top:4px">
+              <span class="breakdown-bar auto" style="width:${a}%"></span><span class="breakdown-bar changes" style="width:${c}%"></span><span class="breakdown-bar escalate" style="width:${e}%"></span>
+            </div>
+          </td>
+          <td class="num">${i.total}<div style="display:inline-block;width:${volume}px;height:4px;background:var(--link);opacity:0.4;border-radius:2px;margin-left:6px;vertical-align:middle"></div></td>
+          <td class="num">${i.auto_merge}</td>
+          <td class="num">${i.request_changes}</td>
+          <td class="num" style="color:var(--escalate)">${i.escalate}</td>
+          <td class="num">${escRate}</td>
+          <td class="num">${conf}</td>
+        </tr>`;
+      }).join('');
+      return `
+        ${tabs}
+        <h2 style="margin-bottom:8px">Breakdown · ${rangeLabel}</h2>
+        <table class="breakdown-table">
+          <thead><tr>
+            <th>${data.dimension}</th>
+            <th class="num">total</th>
+            <th class="num">auto</th>
+            <th class="num">changes</th>
+            <th class="num">escalate</th>
+            <th class="num">esc rate</th>
+            <th class="num">avg conf</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
     }
 
     let searchDebounce = null;
@@ -415,6 +532,7 @@
       loadHistogram();
       loadAb();
       loadOps();
+      loadBreakdown();
     }
 
     function fmtTokens(n) {
@@ -705,12 +823,14 @@
     loadHistogram();
     loadAb();
     loadOps();
+    loadBreakdown();
     loadQueues();
     setInterval(loadList, 30000);  // refresh every 30s
     setInterval(loadKpi, 30000);
     setInterval(loadHistogram, 30000);
     setInterval(loadAb, 30000);
     setInterval(loadOps, 30000);
+    setInterval(loadBreakdown, 30000);
     setInterval(loadQueues, 10000);  // queue health is operational — poll faster
   </script>
 </body>

@@ -154,6 +154,47 @@ def register_dashboard(
             }
         )
 
+    @router.get("/api/stats/by_repo")
+    async def stats_by_repo(
+        range: str = Query("24h"),
+        limit: int = Query(20, ge=1, le=100),
+    ) -> JSONResponse:
+        return await _stats_by_dim("repo", range, limit)
+
+    @router.get("/api/stats/by_channel")
+    async def stats_by_channel(
+        range: str = Query("24h"),
+        limit: int = Query(20, ge=1, le=100),
+    ) -> JSONResponse:
+        return await _stats_by_dim("channel", range, limit)
+
+    async def _stats_by_dim(dim: str, range_str: str, limit: int) -> JSONResponse:
+        if range_str not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400, detail=f"invalid range: {range_str!r}"
+            )
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        rows = await trace_reader.stats_by_dimension(
+            dim, range_str, limit=limit
+        )
+        # Compute escalation rate per row for the UI — simpler here than
+        # in SQL, and lets the frontend stay shape-agnostic.
+        out = []
+        for r in rows:
+            total = r.get("total", 0)
+            out.append(
+                _serialize(
+                    {
+                        **r,
+                        "escalation_rate": (r["escalate"] / total) if total else 0.0,
+                    }
+                )
+            )
+        return JSONResponse({"dimension": dim, "range": range_str, "items": out})
+
     @router.get("/api/stats/operations")
     async def stats_operations(
         range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),

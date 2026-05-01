@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS pr_trace (
     event_id         TEXT NOT NULL,
     workflow         TEXT NOT NULL,
     source_channel   TEXT NOT NULL,
+    repo_full_name   TEXT,
     pr_metadata      JSONB NOT NULL,
     dispatcher_output JSONB,
     specialist_outputs JSONB,
@@ -47,10 +48,13 @@ CREATE TABLE IF NOT EXISTS pr_trace (
 ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS detail_markdown TEXT;
 ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS token_usage JSONB;
 ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS repo_full_name TEXT;
 
 CREATE INDEX IF NOT EXISTS pr_trace_event_id_idx ON pr_trace(event_id);
 CREATE INDEX IF NOT EXISTS pr_trace_workflow_idx ON pr_trace(workflow);
 CREATE INDEX IF NOT EXISTS pr_trace_created_at_idx ON pr_trace(created_at);
+CREATE INDEX IF NOT EXISTS pr_trace_repo_idx ON pr_trace(repo_full_name);
+CREATE INDEX IF NOT EXISTS pr_trace_source_channel_idx ON pr_trace(source_channel);
 """
 
 
@@ -82,18 +86,22 @@ class TraceStore:
     ) -> None:
         assert self._conn is not None, "TraceStore.connect() must be called first"
         output = result.output
+        repo_full_name = (
+            (task.workflow_input.get("repo") or {}).get("full_name")
+            or (task.workflow_input.get("pr") or {}).get("repo_full_name")
+        )
         async with self._conn.cursor() as cur:
             await cur.execute(
                 """
                 INSERT INTO pr_trace (
-                    task_id, event_id, workflow, source_channel,
+                    task_id, event_id, workflow, source_channel, repo_full_name,
                     pr_metadata, dispatcher_output, specialist_outputs,
                     lead_outputs, cto_output, risk_metadata,
                     summary_markdown, detail_markdown,
                     token_usage, duration_ms, completed_at
                 )
                 VALUES (
-                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
@@ -109,6 +117,7 @@ class TraceStore:
                     detail_markdown = EXCLUDED.detail_markdown,
                     token_usage = EXCLUDED.token_usage,
                     duration_ms = EXCLUDED.duration_ms,
+                    repo_full_name = EXCLUDED.repo_full_name,
                     completed_at = EXCLUDED.completed_at
                 """,
                 (
@@ -116,6 +125,7 @@ class TraceStore:
                     task.event_id,
                     task.workflow,
                     source_channel,
+                    repo_full_name,
                     json.dumps(task.workflow_input.get("pr", {}), ensure_ascii=False),
                     json.dumps(output.get("dispatcher_output"), ensure_ascii=False),
                     json.dumps(output.get("specialist_outputs"), ensure_ascii=False),

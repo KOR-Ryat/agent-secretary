@@ -522,6 +522,78 @@ def test_api_stats_ab_rejects_invalid_range():
     reader.stats_ab.assert_not_awaited()
 
 
+def test_api_stats_by_repo_returns_rows_with_escalation_rate():
+    """by_repo computes escalation_rate per row from the SQL counts —
+    keeps SQL portable while letting the UI stay shape-agnostic."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_by_dimension.return_value = [
+        {
+            "dim": "mesher-labs/project-201-server",
+            "total": 10,
+            "auto_merge": 6,
+            "request_changes": 3,
+            "escalate": 1,
+            "avg_confidence": 0.82,
+        },
+    ]
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/by_repo?range=24h")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["dimension"] == "repo"
+    assert body["range"] == "24h"
+    assert body["items"][0]["escalation_rate"] == 0.1
+    reader.stats_by_dimension.assert_awaited_once_with("repo", "24h", limit=20)
+
+
+def test_api_stats_by_channel_uses_channel_dimension():
+    """The /by_channel and /by_repo routes share an aggregator but pass
+    different dimension tokens through."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_by_dimension.return_value = []
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/by_channel?range=7d&limit=5")
+    assert res.status_code == 200
+    reader.stats_by_dimension.assert_awaited_once_with("channel", "7d", limit=5)
+
+
+def test_api_stats_by_repo_zero_total_doesnt_divide_by_zero():
+    """If a row sneaks through with total=0 (shouldn't, but be safe),
+    escalation_rate must be 0.0, not raise."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_by_dimension.return_value = [
+        {"dim": "x", "total": 0, "auto_merge": 0,
+         "request_changes": 0, "escalate": 0, "avg_confidence": None},
+    ]
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/by_repo")
+    assert res.status_code == 200
+    assert res.json()["items"][0]["escalation_rate"] == 0.0
+
+
+def test_api_stats_by_repo_rejects_invalid_range():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/by_repo?range=zzz")
+    assert res.status_code == 400
+    reader.stats_by_dimension.assert_not_awaited()
+
+
 def test_api_stats_operations_passes_aggregate_through():
     """Route fetches raw rows from the reader and shapes them with the
     pure aggregator — verify the wiring."""

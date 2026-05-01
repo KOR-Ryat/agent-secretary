@@ -187,6 +187,61 @@ class TraceReader:
             await cur.execute(_DETAIL_SQL, (task_id,))
             return await cur.fetchone()
 
+    async def stats_by_dimension(
+        self, dimension: str, range_token: str = "24h", *, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Decision distribution grouped by repo or source channel.
+
+        ``dimension`` must be ``"repo"`` (groups by repo_full_name) or
+        ``"channel"`` (groups by source_channel). Rows where the chosen
+        column is NULL are skipped — they'd just be a meaningless
+        bucket. Order: total DESC, then escalation DESC for tiebreak so
+        risky high-volume sources surface first.
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        if range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+        if dimension == "repo":
+            column = "repo_full_name"
+        elif dimension == "channel":
+            column = "source_channel"
+        else:
+            raise ValueError(f"unknown dimension: {dimension!r}")
+        interval = _RANGE_TO_INTERVAL[range_token]
+
+        time_filter = ""
+        params: list[Any] = []
+        if interval is not None:
+            time_filter = "AND completed_at >= NOW() - %s::interval"
+            params.append(interval)
+        params.append(limit)
+
+        decision_expr = "cto_output ->> 'decision'"
+        sql = f"""
+        SELECT
+            {column} AS dim,
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE {decision_expr} = 'auto-merge')::int
+                AS auto_merge,
+            COUNT(*) FILTER (WHERE {decision_expr} = 'request-changes')::int
+                AS request_changes,
+            COUNT(*) FILTER (WHERE {decision_expr} = 'escalate-to-human')::int
+                AS escalate,
+            AVG(NULLIF(cto_output ->> 'confidence', '')::float)
+                AS avg_confidence
+        FROM pr_trace
+        WHERE completed_at IS NOT NULL
+          AND {column} IS NOT NULL
+          {time_filter}
+        GROUP BY {column}
+        ORDER BY total DESC, escalate DESC
+        LIMIT %s
+        """
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
+        return rows
+
     async def stats_operations(self, range_token: str = "24h") -> dict[str, Any]:
         """Aggregate token usage + latency over a window.
 
