@@ -235,6 +235,141 @@ def test_api_stats_decisions_default_range_is_24h():
     reader.stats_decisions.assert_awaited_once_with("24h")
 
 
+def test_compare_page_serves_html():
+    """The /compare/{event_id} page is static; the route must serve it
+    so the SPA can fetch its data client-side."""
+    from fastapi.testclient import TestClient
+
+    app = _make_app(trace_reader=AsyncMock())
+    client = TestClient(app)
+    res = client.get("/compare/abc-123")
+    assert res.status_code == 200
+    assert "A/B compare" in res.text
+
+
+def test_api_compare_404_when_no_traces():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_ab_pair.return_value = []
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/compare/missing-event")
+    assert res.status_code == 404
+
+
+def test_api_compare_returns_pair_when_both_present():
+    """list_ab_pair returns up to 2 rows; route splits them by workflow."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_ab_pair.return_value = [
+        {
+            "task_id": "tA", "event_id": "evt-1",
+            "workflow": "pr_review", "source_channel": "github",
+            "pr_metadata": {}, "dispatcher_output": None,
+            "specialist_outputs": None, "lead_outputs": None,
+            "cto_output": {"decision": "auto-merge", "confidence": 0.9},
+            "risk_metadata": None, "summary_markdown": "A",
+            "detail_markdown": None, "human_decision": None,
+            "created_at": datetime(2026, 4, 30, 12, tzinfo=UTC),
+            "completed_at": datetime(2026, 4, 30, 12, 1, tzinfo=UTC),
+        },
+        {
+            "task_id": "tB", "event_id": "evt-1",
+            "workflow": "pr_review_monolithic", "source_channel": "github",
+            "pr_metadata": {}, "dispatcher_output": None,
+            "specialist_outputs": None, "lead_outputs": None,
+            "cto_output": {"decision": "request-changes", "confidence": 0.7},
+            "risk_metadata": None, "summary_markdown": "B",
+            "detail_markdown": None, "human_decision": None,
+            "created_at": datetime(2026, 4, 30, 12, tzinfo=UTC),
+            "completed_at": datetime(2026, 4, 30, 12, 2, tzinfo=UTC),
+        },
+    ]
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/compare/evt-1")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["primary"]["task_id"] == "tA"
+    assert body["shadow"]["task_id"] == "tB"
+    assert body["primary"]["cto_output"]["decision"] == "auto-merge"
+    assert body["shadow"]["cto_output"]["decision"] == "request-changes"
+
+
+def test_api_compare_handles_one_sided_pair():
+    """If only the primary completed (shadow still in flight), the route
+    must still 200 with shadow=None — not 404."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_ab_pair.return_value = [
+        {
+            "task_id": "tA", "event_id": "evt-2",
+            "workflow": "pr_review", "source_channel": "github",
+            "pr_metadata": {}, "dispatcher_output": None,
+            "specialist_outputs": None, "lead_outputs": None,
+            "cto_output": {"decision": "auto-merge"},
+            "risk_metadata": None, "summary_markdown": None,
+            "detail_markdown": None, "human_decision": None,
+            "created_at": datetime(2026, 4, 30, 12, tzinfo=UTC),
+            "completed_at": datetime(2026, 4, 30, 12, 1, tzinfo=UTC),
+        },
+    ]
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/compare/evt-2")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["primary"]["task_id"] == "tA"
+    assert body["shadow"] is None
+
+
+def test_api_stats_ab_returns_pairs():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_ab.return_value = {
+        "range": "24h",
+        "total_pairs": 3,
+        "agree": 2,
+        "disagree": 1,
+        "agreement_rate": 2 / 3,
+        "pairs": [
+            {
+                "event_id": "e1", "primary_task_id": "tp1", "shadow_task_id": "ts1",
+                "primary_decision": "auto-merge", "shadow_decision": "auto-merge",
+                "primary_confidence": "0.9", "shadow_confidence": "0.85",
+                "created_at": datetime(2026, 4, 30, 11, tzinfo=UTC),
+            },
+        ],
+    }
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/ab?range=24h")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total_pairs"] == 3
+    assert body["disagree"] == 1
+    assert len(body["pairs"]) == 1
+
+
+def test_api_stats_ab_rejects_invalid_range():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/ab?range=zzz")
+    assert res.status_code == 400
+    reader.stats_ab.assert_not_awaited()
+
+
 def test_api_stats_confidence_returns_bins():
     """Histogram endpoint serializes 10 bins with label + count."""
     from fastapi.testclient import TestClient

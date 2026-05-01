@@ -174,6 +174,84 @@ class TraceReader:
             await cur.execute(_DETAIL_SQL, (task_id,))
             return await cur.fetchone()
 
+    async def list_ab_pair(self, event_id: str) -> list[dict[str, Any]]:
+        """Return both primary + shadow traces for a single event_id.
+
+        Up to two rows: one with workflow=`pr_review` (primary) and one
+        with workflow=`pr_review_monolithic` (shadow). Order:
+        primary first, shadow second.
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        sql = """
+        SELECT
+            task_id, event_id, workflow, source_channel,
+            pr_metadata, dispatcher_output, specialist_outputs,
+            lead_outputs, cto_output, risk_metadata,
+            summary_markdown, detail_markdown, human_decision,
+            created_at, completed_at
+        FROM pr_trace
+        WHERE event_id = %s
+          AND workflow IN ('pr_review', 'pr_review_monolithic')
+        ORDER BY workflow ASC  -- 'pr_review' < 'pr_review_monolithic'
+        """
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, (event_id,))
+            return await cur.fetchall()
+
+    async def stats_ab(self, range_token: str = "24h") -> dict[str, Any]:
+        """Aggregate A/B agreement: rate of pr_review vs pr_review_monolithic
+        decisions matching, and the most recent disagreements.
+
+        Only includes events that have BOTH workflows completed. Events
+        with one side still in flight (or AB mode disabled) are skipped.
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        if range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+        interval = _RANGE_TO_INTERVAL[range_token]
+
+        time_filter = ""
+        params: tuple[Any, ...] = ()
+        if interval is not None:
+            time_filter = "AND a.created_at >= NOW() - %s::interval"
+            params = (interval,)
+
+        sql = f"""
+        SELECT
+            a.event_id,
+            a.task_id        AS primary_task_id,
+            b.task_id        AS shadow_task_id,
+            a.cto_output ->> 'decision'   AS primary_decision,
+            b.cto_output ->> 'decision'   AS shadow_decision,
+            a.cto_output ->> 'confidence' AS primary_confidence,
+            b.cto_output ->> 'confidence' AS shadow_confidence,
+            a.created_at
+        FROM pr_trace a
+        JOIN pr_trace b
+          ON a.event_id = b.event_id
+         AND a.workflow = 'pr_review'
+         AND b.workflow = 'pr_review_monolithic'
+        WHERE a.completed_at IS NOT NULL
+          AND b.completed_at IS NOT NULL
+          {time_filter}
+        ORDER BY a.created_at DESC
+        LIMIT 50
+        """
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
+
+        agree = sum(1 for r in rows if r["primary_decision"] == r["shadow_decision"])
+        total = len(rows)
+        return {
+            "range": range_token,
+            "total_pairs": total,
+            "agree": agree,
+            "disagree": total - agree,
+            "agreement_rate": (agree / total) if total else 0.0,
+            "pairs": rows,
+        }
+
     async def stats_confidence(self, range_token: str = "24h") -> dict[str, Any]:
         """Histogram of CTO confidence scores into 10 bins of width 0.1.
 

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>agent-secretary · A/B compare</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #161a22;
+      --panel-2: #1d222c;
+      --border: #2a313d;
+      --fg: #e6e8eb;
+      --fg-muted: #9aa3b2;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --escalate: #f85149;
+      --link: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--fg);
+    }
+    header {
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; gap: 16px;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header .sub { color: var(--fg-muted); font-size: 13px; }
+    header a { color: var(--link); text-decoration: none; font-size: 13px; }
+    .verdict {
+      padding: 12px 24px; border-bottom: 1px solid var(--border);
+      background: var(--panel); display: flex; align-items: center; gap: 16px;
+      font-size: 14px;
+    }
+    .verdict .badge {
+      padding: 4px 12px; border-radius: 12px; font-weight: 600;
+    }
+    .verdict.match .badge { background: rgba(63,185,80,.15); color: var(--ok); }
+    .verdict.diff .badge  { background: rgba(248,81,73,.15); color: var(--escalate); }
+    .panes { display: grid; grid-template-columns: 1fr 1fr; }
+    .pane { padding: 16px 24px; border-right: 1px solid var(--border); }
+    .pane:last-child { border-right: none; }
+    .pane h2 { margin: 0 0 6px; font-size: 14px; color: var(--fg-muted); font-weight: 500; }
+    .pane .workflow {
+      display: inline-block; font-family: ui-monospace, "SF Mono", monospace;
+      font-size: 11px; padding: 2px 6px; border-radius: 4px;
+      background: var(--panel-2); color: var(--fg-muted);
+    }
+    .decision {
+      display: inline-block; font-size: 11px; padding: 2px 8px;
+      border-radius: 10px; font-weight: 600; margin-left: 8px;
+    }
+    .decision.auto-merge { background: rgba(63,185,80,.15); color: var(--ok); }
+    .decision.escalate-to-human { background: rgba(248,81,73,.15); color: var(--escalate); }
+    .decision.request-changes { background: rgba(210,153,34,.15); color: var(--warn); }
+    .decision.none { background: var(--panel-2); color: var(--fg-muted); }
+    section.detail { margin-top: 14px; }
+    section.detail h3 { font-size: 12px; color: var(--fg-muted); margin: 0 0 6px; font-weight: 500; }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px; overflow-x: auto;
+      font-size: 12px; line-height: 1.5;
+    }
+    .summary-rendered {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px; white-space: pre-wrap;
+      font-size: 12px; line-height: 1.5;
+    }
+    .empty { color: var(--fg-muted); font-size: 13px; padding: 12px 0; }
+    .meta { color: var(--fg-muted); font-size: 11px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>agent-secretary</h1>
+    <span class="sub">A/B compare</span>
+    <a href="/">← back to dashboard</a>
+  </header>
+  <div id="verdict" class="verdict"><span>로딩 중…</span></div>
+  <div class="panes">
+    <div class="pane" id="primary"><h2>Primary · pr_review</h2><div class="empty">로딩 중…</div></div>
+    <div class="pane" id="shadow"><h2>Shadow · pr_review_monolithic</h2><div class="empty">로딩 중…</div></div>
+  </div>
+
+  <script>
+    const eventId = decodeURIComponent(location.pathname.split('/').pop());
+
+    function decisionClass(d) {
+      if (!d) return 'none';
+      return ['auto-merge', 'escalate-to-human', 'request-changes'].includes(d) ? d : 'none';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+
+    function fmtTime(s) {
+      if (!s) return '—';
+      return new Date(s).toLocaleString('ko-KR', { hour12: false });
+    }
+
+    function renderPane(target, label, t) {
+      const el = document.getElementById(target);
+      if (!t) {
+        el.innerHTML = `<h2>${label}</h2><div class="empty">(이 워크플로우의 트레이스가 없습니다)</div>`;
+        return;
+      }
+      const d = t.cto_output && t.cto_output.decision || null;
+      const dc = decisionClass(d);
+      const conf = t.cto_output && t.cto_output.confidence;
+      el.innerHTML = `
+        <h2>${label}</h2>
+        <span class="workflow">${t.workflow}</span>
+        <span class="decision ${dc}">${d || '—'}</span>
+        ${conf != null ? `<span class="meta"> · conf ${(+conf).toFixed(2)}</span>` : ''}
+        <div class="meta">task_id: <a href="/#${t.task_id}">${t.task_id}</a> · ${fmtTime(t.completed_at || t.created_at)}</div>
+        <section class="detail">
+          <h3>Summary</h3>
+          ${t.summary_markdown
+            ? `<div class="summary-rendered">${escapeHtml(t.summary_markdown)}</div>`
+            : '<div class="empty">(없음)</div>'}
+        </section>
+        <section class="detail">
+          <h3>CTO output</h3>
+          <pre>${escapeHtml(JSON.stringify(t.cto_output, null, 2))}</pre>
+        </section>
+      `;
+    }
+
+    async function load() {
+      const verdict = document.getElementById('verdict');
+      try {
+        const res = await fetch('/api/compare/' + encodeURIComponent(eventId));
+        if (!res.ok) {
+          verdict.className = 'verdict';
+          verdict.innerHTML = `<span>HTTP ${res.status}: ${res.status === 404 ? '해당 event_id의 트레이스가 없습니다.' : '불러오기 실패'}</span>`;
+          document.getElementById('primary').innerHTML = '';
+          document.getElementById('shadow').innerHTML = '';
+          return;
+        }
+        const data = await res.json();
+        const p = data.primary, s = data.shadow;
+        const pd = p && p.cto_output && p.cto_output.decision || null;
+        const sd = s && s.cto_output && s.cto_output.decision || null;
+        const haveBoth = !!(p && s);
+        const match = haveBoth && pd === sd;
+        verdict.className = 'verdict ' + (haveBoth ? (match ? 'match' : 'diff') : '');
+        verdict.innerHTML = haveBoth
+          ? `<span class="badge">${match ? '✓ AGREE' : '✗ DISAGREE'}</span>
+             <span>event_id: <code>${escapeHtml(eventId)}</code></span>
+             <span class="meta">primary=${pd || '—'}, shadow=${sd || '—'}</span>`
+          : `<span>event_id: <code>${escapeHtml(eventId)}</code></span>
+             <span class="meta">한쪽 워크플로우만 완료됨 — A/B 비교 불가</span>`;
+        renderPane('primary', 'Primary · pr_review', p);
+        renderPane('shadow', 'Shadow · pr_review_monolithic', s);
+      } catch (e) {
+        verdict.innerHTML = `<span>에러: ${escapeHtml(e.message)}</span>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

@@ -81,6 +81,29 @@
     .hist-axis { stroke: var(--border); stroke-width: 1; }
     .hist-tick { fill: var(--fg-muted); font-size: 10px; font-family: ui-monospace, "SF Mono", monospace; }
     .hist-empty { color: var(--fg-muted); font-size: 12px; }
+    .ab-row {
+      padding: 10px 24px; border-bottom: 1px solid var(--border);
+      background: var(--panel); display: flex; gap: 16px; align-items: center;
+      flex-wrap: wrap; font-size: 12px;
+    }
+    .ab-row .ab-label {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; min-width: 130px;
+    }
+    .ab-row .ab-stat { color: var(--fg); }
+    .ab-row .ab-stat strong { color: var(--fg); font-weight: 600; }
+    .ab-row a.diff {
+      color: var(--escalate); text-decoration: none;
+      padding: 2px 8px; border-radius: 4px; background: rgba(248,81,73,.10);
+      font-family: ui-monospace, "SF Mono", monospace; font-size: 11px;
+    }
+    .ab-row a.diff:hover { background: rgba(248,81,73,.20); }
+    .row .compare-link {
+      font-size: 11px; color: var(--link); text-decoration: none;
+      padding: 1px 6px; border-radius: 3px; background: var(--panel);
+      margin-left: 8px;
+    }
+    .row .compare-link:hover { background: var(--panel-2); }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -158,11 +181,12 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
-    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram();">↻ refresh</button>
+    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb();">↻ refresh</button>
   </header>
   <div id="banner"></div>
   <div class="kpi-row" id="kpi"></div>
   <div class="hist-row" id="hist"></div>
+  <div class="ab-row" id="ab" style="display:none"></div>
   <main>
     <div class="left">
       <div class="filter-bar">
@@ -313,6 +337,36 @@
       kpiRange = r;
       loadKpi();
       loadHistogram();
+      loadAb();
+    }
+
+    async function loadAb() {
+      const el = document.getElementById('ab');
+      try {
+        const res = await fetch('/api/stats/ab?range=' + encodeURIComponent(kpiRange));
+        if (res.status === 503) { el.style.display = 'none'; return; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        if (!s.total_pairs) { el.style.display = 'none'; return; }
+        el.style.display = 'flex';
+        const rate = (100 * s.agreement_rate).toFixed(0) + '%';
+        const diffs = s.pairs.filter(p => p.primary_decision !== p.shadow_decision).slice(0, 6);
+        const diffLinks = diffs.map(p =>
+          `<a class="diff" href="/compare/${encodeURIComponent(p.event_id)}" title="primary=${p.primary_decision || '—'} · shadow=${p.shadow_decision || '—'}">
+            ${escapeHtml((p.event_id || '').slice(0, 12))}
+          </a>`
+        ).join(' ');
+        el.innerHTML = `
+          <span class="ab-label">A/B agreement</span>
+          <span class="ab-stat"><strong>${rate}</strong> (${s.agree}/${s.total_pairs})</span>
+          ${s.disagree
+            ? `<span class="ab-stat">${s.disagree} disagreement${s.disagree === 1 ? '' : 's'}: ${diffLinks}</span>`
+            : '<span class="ab-stat">no disagreements</span>'}
+        `;
+      } catch (e) {
+        el.style.display = 'flex';
+        el.innerHTML = `<span class="ab-label">A/B agreement</span><span class="hist-empty">불러오기 실패</span>`;
+      }
     }
 
     async function loadHistogram() {
@@ -391,11 +445,17 @@
           const dc = decisionClass(d);
           const summary = (item.summary_markdown || '').slice(0, 160);
           const sel = item.task_id === selectedTaskId ? ' selected' : '';
+          const compareLink = (item.workflow === 'pr_review' || item.workflow === 'pr_review_monolithic') && item.event_id
+            ? `<a class="compare-link" href="/compare/${encodeURIComponent(item.event_id)}" onclick="event.stopPropagation()" title="A/B 비교">A/B ↗</a>`
+            : '';
           return `
             <a class="row${sel}" data-id="${item.task_id}" onclick="loadDetail('${item.task_id}'); return false;" href="#${item.task_id}">
               <div class="top">
                 <span class="workflow">${item.workflow}</span>
-                <span class="decision ${dc}">${d || '—'}</span>
+                <span>
+                  <span class="decision ${dc}">${d || '—'}</span>
+                  ${compareLink}
+                </span>
               </div>
               <div class="summary">${escapeHtml(summary)}${item.summary_markdown && item.summary_markdown.length > 160 ? '…' : ''}</div>
               <div class="meta">
@@ -467,9 +527,11 @@
     loadList();
     loadKpi();
     loadHistogram();
+    loadAb();
     setInterval(loadList, 30000);  // refresh every 30s
     setInterval(loadKpi, 30000);
     setInterval(loadHistogram, 30000);
+    setInterval(loadAb, 30000);
   </script>
 </body>
 </html>

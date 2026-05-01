@@ -33,6 +33,7 @@ from ingress.logging import get_logger
 log = get_logger("ingress.dashboard.routes")
 
 _INDEX_HTML = Path(__file__).parent / "index.html"
+_COMPARE_HTML = Path(__file__).parent / "compare.html"
 
 
 def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
@@ -85,6 +86,60 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
         if row is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return JSONResponse(_serialize(row))
+
+    @router.get("/compare/{event_id}", include_in_schema=False)
+    async def compare_page(event_id: str) -> FileResponse:
+        # The page itself is static; the event_id is read client-side
+        # from window.location.pathname. Matches the trace detail UX.
+        del event_id
+        return FileResponse(_COMPARE_HTML, media_type="text/html")
+
+    @router.get("/api/compare/{event_id}")
+    async def get_compare(event_id: str) -> JSONResponse:
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        rows = await trace_reader.list_ab_pair(event_id)
+        if not rows:
+            raise HTTPException(status_code=404, detail="no traces for event_id")
+        primary = next(
+            (r for r in rows if r["workflow"] == "pr_review"), None
+        )
+        shadow = next(
+            (r for r in rows if r["workflow"] == "pr_review_monolithic"), None
+        )
+        return JSONResponse(
+            {
+                "event_id": event_id,
+                "primary": _serialize(primary) if primary else None,
+                "shadow": _serialize(shadow) if shadow else None,
+            }
+        )
+
+    @router.get("/api/stats/ab")
+    async def stats_ab(
+        range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),
+    ) -> JSONResponse:
+        if range not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400, detail=f"invalid range: {range!r}"
+            )
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        stats = await trace_reader.stats_ab(range)
+        return JSONResponse(
+            {
+                "range": stats["range"],
+                "total_pairs": stats["total_pairs"],
+                "agree": stats["agree"],
+                "disagree": stats["disagree"],
+                "agreement_rate": stats["agreement_rate"],
+                "pairs": [_serialize(p) for p in stats["pairs"]],
+            }
+        )
 
     @router.get("/api/stats/confidence")
     async def stats_confidence(
