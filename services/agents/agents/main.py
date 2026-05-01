@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 
 from agent_secretary_config import MAX_DELIVERIES
 from agent_secretary_schemas import ResultEvent
-from anthropic import AsyncAnthropic
 from redis.asyncio import Redis
 
 from agents import usage as usage_mod
@@ -42,8 +41,9 @@ async def run() -> None:
     queue = AgentsQueue(redis, settings.consumer_group, settings.consumer_name)
     await queue.ensure_group()
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    runner = WorkflowRunner(client, settings)
+    # Auth happens inside claude_agent_sdk: ANTHROPIC_API_KEY env var if
+    # set, else Claude Code subscription OAuth. No client object needed.
+    runner = WorkflowRunner(settings)
 
     trace = make_trace_store(settings.database_url)
     await trace.connect()

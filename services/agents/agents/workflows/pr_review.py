@@ -19,7 +19,6 @@ from agent_secretary_config import (
 )
 from agent_secretary_schemas import PersonaOutput
 from agent_secretary_schemas.personas import RiskMetadata
-from anthropic import AsyncAnthropic
 
 from agents.config import Settings
 from agents.logging import get_logger
@@ -35,12 +34,11 @@ log = get_logger("agents.workflows.pr_review")
 
 
 class PrReviewRunner:
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
-        self._client = client
+    def __init__(self, settings: Settings) -> None:
         self._prompts = Path(settings.prompts_dir)
         self._model_default = settings.model_default
-        self._dispatcher = Dispatcher(client, self._prompts, settings.model_default)
-        self._cto = Cto(client, self._prompts, settings.model_cto)
+        self._dispatcher = Dispatcher(self._prompts, settings.model_default)
+        self._cto = Cto(self._prompts, settings.model_cto)
 
     async def run(self, workflow_input: dict) -> dict:
         pr = workflow_input.get("pr", {})
@@ -123,7 +121,7 @@ class PrReviewRunner:
                     lead=spec.lead,
                 )
                 continue
-            agent = build_specialist(name, self._client, self._prompts, self._model_default)
+            agent = build_specialist(name, self._prompts, self._model_default)
             assert agent is not None
             runners.append((spec.lead, agent))
 
@@ -151,7 +149,7 @@ class PrReviewRunner:
     ) -> list:
         leads = []
         for name in activated_lead_names:
-            agent = build_lead(name, self._client, self._prompts, self._model_default)
+            agent = build_lead(name, self._prompts, self._model_default)
             if agent is None:
                 log.warning("workflow.lead.unknown", name=name)
                 continue
