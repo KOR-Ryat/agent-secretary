@@ -17,6 +17,7 @@ from typing import Generic, TypeVar
 from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ValidationError
 
+from agents import usage as usage_mod
 from agents.logging import get_logger
 
 log = get_logger("agents.personas")
@@ -70,6 +71,22 @@ class PersonaAgent(Generic[T]):
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
         )
+        acc = usage_mod.current()
+        if acc is not None:
+            acc.record(
+                persona_id=self.persona_id,
+                model=self.model,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                # Cache fields are present on responses from prompt-cached
+                # requests; absent otherwise. Treat missing as zero.
+                cache_read_tokens=getattr(
+                    response.usage, "cache_read_input_tokens", 0
+                ) or 0,
+                cache_creation_tokens=getattr(
+                    response.usage, "cache_creation_input_tokens", 0
+                ) or 0,
+            )
         return self._parse(text)
 
     def _build_user_message(self, user_input: dict) -> str:

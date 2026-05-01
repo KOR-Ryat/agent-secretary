@@ -26,6 +26,7 @@ from agent_secretary_schemas.personas import (
 from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
+from agents import usage as usage_mod
 from agents.config import Settings
 from agents.logging import get_logger
 from agents.workflows.pr_review import _compute_risk_metadata
@@ -75,6 +76,21 @@ class MonolithicReviewRunner:
         )
         text = _extract_text(response)
         parsed = _parse_output(text, risk)
+
+        acc = usage_mod.current()
+        if acc is not None:
+            acc.record(
+                persona_id="monolithic_review",
+                model=self._model,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cache_read_tokens=getattr(
+                    response.usage, "cache_read_input_tokens", 0
+                ) or 0,
+                cache_creation_tokens=getattr(
+                    response.usage, "cache_creation_input_tokens", 0
+                ) or 0,
+            )
 
         log.info(
             "workflow.monolithic_review.complete",

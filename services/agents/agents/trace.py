@@ -37,12 +37,16 @@ CREATE TABLE IF NOT EXISTS pr_trace (
     summary_markdown TEXT,
     detail_markdown  TEXT,
     human_decision   JSONB,
+    token_usage      JSONB,
+    duration_ms      INTEGER,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at     TIMESTAMPTZ
 );
 
 -- Idempotent column adds for tables that already exist from earlier deploys.
 ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS detail_markdown TEXT;
+ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS token_usage JSONB;
+ALTER TABLE pr_trace ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
 
 CREATE INDEX IF NOT EXISTS pr_trace_event_id_idx ON pr_trace(event_id);
 CREATE INDEX IF NOT EXISTS pr_trace_workflow_idx ON pr_trace(workflow);
@@ -73,6 +77,8 @@ class TraceStore:
         task: TaskSpec,
         result: ResultEvent,
         source_channel: str,
+        token_usage: dict | None = None,
+        duration_ms: int | None = None,
     ) -> None:
         assert self._conn is not None, "TraceStore.connect() must be called first"
         output = result.output
@@ -83,12 +89,14 @@ class TraceStore:
                     task_id, event_id, workflow, source_channel,
                     pr_metadata, dispatcher_output, specialist_outputs,
                     lead_outputs, cto_output, risk_metadata,
-                    summary_markdown, detail_markdown, completed_at
+                    summary_markdown, detail_markdown,
+                    token_usage, duration_ms, completed_at
                 )
                 VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
+                    %s, %s,
                     %s, %s, %s
                 )
                 ON CONFLICT (task_id) DO UPDATE SET
@@ -99,6 +107,8 @@ class TraceStore:
                     risk_metadata = EXCLUDED.risk_metadata,
                     summary_markdown = EXCLUDED.summary_markdown,
                     detail_markdown = EXCLUDED.detail_markdown,
+                    token_usage = EXCLUDED.token_usage,
+                    duration_ms = EXCLUDED.duration_ms,
                     completed_at = EXCLUDED.completed_at
                 """,
                 (
@@ -114,6 +124,8 @@ class TraceStore:
                     json.dumps(output.get("risk_metadata"), ensure_ascii=False),
                     result.summary_markdown,
                     result.detail_markdown,
+                    json.dumps(token_usage, ensure_ascii=False) if token_usage else None,
+                    duration_ms,
                     result.completed_at,
                 ),
             )

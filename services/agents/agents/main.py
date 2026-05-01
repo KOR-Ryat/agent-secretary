@@ -7,6 +7,7 @@ publishes ResultEvent to `results` stream.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -15,6 +16,7 @@ from agent_secretary_schemas import ResultEvent
 from anthropic import AsyncAnthropic
 from redis.asyncio import Redis
 
+from agents import usage as usage_mod
 from agents.config import Settings
 from agents.logging import configure_logging, get_logger
 from agents.queue import AgentsQueue
@@ -57,8 +59,10 @@ async def run() -> None:
                 workflow=task.workflow,
                 delivery=delivery,
             )
+            t_start = time.perf_counter()
             try:
-                output = await runner.run(task.workflow, task.workflow_input)
+                with usage_mod.usage_scope() as usage_acc:
+                    output = await runner.run(task.workflow, task.workflow_input)
             except UnknownWorkflowError as e:
                 log.warning("agents.workflow.unknown", task_id=task.task_id, reason=str(e))
                 await queue.to_dlq(message_id, task.model_dump_json(), str(e))
@@ -102,12 +106,17 @@ async def run() -> None:
                 trace_url=trace_url,
             )
 
+            duration_ms = int((time.perf_counter() - t_start) * 1000)
+            token_usage = usage_acc.totals()
+
             # Persist trace before publishing — if trace write fails, we'd
             # rather retry than emit a result without provenance.
             await trace.write(
                 task=task,
                 result=result,
                 source_channel=task.response_routing.primary.channel,
+                token_usage=token_usage,
+                duration_ms=duration_ms,
             )
 
             if task.shadow:
