@@ -67,7 +67,10 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://agent:agent@postgres/agent_secretary
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
+      # Optional. claude_agent_sdk authenticates with this if present;
+      # otherwise it falls back to the OAuth credentials mounted from
+      # ~/.claude (Claude Code MAX subscription). Either path works.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Workspace skill (bare repo + worktree) needs persistent storage + git auth
       AGENT_WORKSPACE_DIR: /var/agent-workspace
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
@@ -78,6 +81,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - agent_workspace:/var/agent-workspace
+      # Mount host's Claude Code config so the SDK can use the OAuth
+      # session when ANTHROPIC_API_KEY is absent. Read-write because
+      # the SDK writes session/cache files; on a dev box that's fine.
+      - ${HOME}/.claude:/root/.claude
     depends_on:
       redis:
         condition: service_healthy

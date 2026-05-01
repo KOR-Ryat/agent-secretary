@@ -7,6 +7,7 @@ publishes ResultEvent to `results` stream.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -29,12 +30,17 @@ log = get_logger("agents.main")
 async def run() -> None:
     settings = Settings.from_env()
     configure_logging(settings.log_level)
+    # Auth path is decided by claude_agent_sdk at call time, but log the
+    # likely choice now so an operator debugging a bad startup can see
+    # whether the API-key path is even available.
+    auth_hint = "api_key" if os.environ.get("ANTHROPIC_API_KEY") else "oauth"
     log.info(
         "agents.starting",
         redis_url=settings.redis_url,
         prompts_dir=settings.prompts_dir,
         model_default=settings.model_default,
         model_cto=settings.model_cto,
+        auth=auth_hint,
     )
 
     redis = Redis.from_url(settings.redis_url, decode_responses=False)
