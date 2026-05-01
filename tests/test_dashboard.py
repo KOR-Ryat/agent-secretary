@@ -235,6 +235,42 @@ def test_api_stats_decisions_default_range_is_24h():
     reader.stats_decisions.assert_awaited_once_with("24h")
 
 
+def test_api_stats_confidence_returns_bins():
+    """Histogram endpoint serializes 10 bins with label + count."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_confidence.return_value = {
+        "range": "24h",
+        "total": 5,
+        "bins": [
+            {"lo": round(i * 0.1, 1), "hi": round((i + 1) * 0.1, 1), "count": (1 if i in (4, 5, 6, 7, 8) else 0)}
+            for i in range(10)
+        ],
+    }
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/confidence?range=24h")
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["bins"]) == 10
+    assert body["bins"][4]["count"] == 1
+    assert body["total"] == 5
+    reader.stats_confidence.assert_awaited_once_with("24h")
+
+
+def test_api_stats_confidence_rejects_invalid_range():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/confidence?range=nope")
+    assert res.status_code == 400
+    reader.stats_confidence.assert_not_awaited()
+
+
 def test_api_trace_detail_returns_row():
     from fastapi.testclient import TestClient
 

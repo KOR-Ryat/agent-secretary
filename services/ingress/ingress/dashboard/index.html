@@ -65,6 +65,22 @@
     .range-picker button.active {
       background: var(--bg); color: var(--fg); border-color: var(--link);
     }
+    .hist-row {
+      padding: 10px 24px; border-bottom: 1px solid var(--border);
+      background: var(--panel); display: flex; gap: 12px; align-items: center;
+    }
+    .hist-row .hist-label {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; min-width: 130px;
+    }
+    .hist-row svg { flex: 1 1 auto; height: 64px; display: block; }
+    .hist-bar { fill: var(--link); }
+    .hist-bar.lo { fill: var(--escalate); }
+    .hist-bar.mid { fill: var(--warn); }
+    .hist-bar.hi { fill: var(--ok); }
+    .hist-axis { stroke: var(--border); stroke-width: 1; }
+    .hist-tick { fill: var(--fg-muted); font-size: 10px; font-family: ui-monospace, "SF Mono", monospace; }
+    .hist-empty { color: var(--fg-muted); font-size: 12px; }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -142,10 +158,11 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
-    <button class="refresh" onclick="loadList(); loadKpi();">↻ refresh</button>
+    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram();">↻ refresh</button>
   </header>
   <div id="banner"></div>
   <div class="kpi-row" id="kpi"></div>
+  <div class="hist-row" id="hist"></div>
   <main>
     <div class="left">
       <div class="filter-bar">
@@ -295,6 +312,49 @@
     function setRange(r) {
       kpiRange = r;
       loadKpi();
+      loadHistogram();
+    }
+
+    async function loadHistogram() {
+      const el = document.getElementById('hist');
+      try {
+        const res = await fetch('/api/stats/confidence?range=' + encodeURIComponent(kpiRange));
+        if (res.status === 503) { el.innerHTML = ''; return; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        if (!s.total) {
+          el.innerHTML = `<span class="hist-label">confidence</span><span class="hist-empty">표본 없음 (${RANGE_LABELS[s.range] || s.range})</span>`;
+          return;
+        }
+        const max = Math.max(...s.bins.map(b => b.count));
+        const W = 600, H = 60, pad = 16;
+        const bw = (W - pad * 2) / s.bins.length;
+        const bars = s.bins.map((b, i) => {
+          const h = max > 0 ? (b.count / max) * (H - 12) : 0;
+          const x = pad + i * bw;
+          const y = H - h;
+          // Color hint: low confidence = escalate-ish, mid = warn, high = ok.
+          const cls = b.lo < 0.4 ? 'lo' : b.lo < 0.7 ? 'mid' : 'hi';
+          const tip = `[${b.lo.toFixed(1)}–${(b.hi).toFixed(1)}${i === 9 ? ']' : ')'}: ${b.count}`;
+          return `<g><rect class="hist-bar ${cls}" x="${x + 1}" y="${y}" width="${bw - 2}" height="${h}"><title>${tip}</title></rect>`
+               + (b.count ? `<text class="hist-tick" x="${x + bw / 2}" y="${y - 2}" text-anchor="middle">${b.count}</text>` : '')
+               + `</g>`;
+        }).join('');
+        const ticks = [0, 0.5, 1.0].map(v => {
+          const x = pad + v * (W - pad * 2);
+          return `<text class="hist-tick" x="${x}" y="${H + 10}" text-anchor="middle">${v.toFixed(1)}</text>`;
+        }).join('');
+        el.innerHTML = `
+          <span class="hist-label">confidence · n=${s.total}</span>
+          <svg viewBox="0 0 ${W} ${H + 14}" preserveAspectRatio="none">
+            <line class="hist-axis" x1="${pad}" y1="${H}" x2="${W - pad}" y2="${H}"/>
+            ${bars}
+            ${ticks}
+          </svg>
+        `;
+      } catch (e) {
+        el.innerHTML = `<span class="hist-label">confidence</span><span class="hist-empty">불러오기 실패</span>`;
+      }
     }
 
     function decisionClass(d) {
@@ -406,8 +466,10 @@
     syncFilterUI();
     loadList();
     loadKpi();
+    loadHistogram();
     setInterval(loadList, 30000);  // refresh every 30s
     setInterval(loadKpi, 30000);
+    setInterval(loadHistogram, 30000);
   </script>
 </body>
 </html>

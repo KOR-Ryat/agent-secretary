@@ -86,6 +86,21 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
             raise HTTPException(status_code=404, detail="trace not found")
         return JSONResponse(_serialize(row))
 
+    @router.get("/api/stats/confidence")
+    async def stats_confidence(
+        range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),
+    ) -> JSONResponse:
+        if range not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400, detail=f"invalid range: {range!r}"
+            )
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        stats = await trace_reader.stats_confidence(range)
+        return JSONResponse(stats)
+
     @router.get("/api/stats/decisions")
     async def stats_decisions(
         range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),

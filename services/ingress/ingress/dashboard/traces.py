@@ -174,6 +174,57 @@ class TraceReader:
             await cur.execute(_DETAIL_SQL, (task_id,))
             return await cur.fetchone()
 
+    async def stats_confidence(self, range_token: str = "24h") -> dict[str, Any]:
+        """Histogram of CTO confidence scores into 10 bins of width 0.1.
+
+        Bin i covers ``[i * 0.1, (i+1) * 0.1)`` for i in 0..8 and
+        ``[0.9, 1.0]`` for i=9 (closed at the top so a perfect 1.0 lands
+        in the last bin instead of overflowing). Rows where the CTO did
+        not record a confidence are excluded — they contribute to the
+        ``no_decision`` counter on /api/stats/decisions instead.
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        if range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+        interval = _RANGE_TO_INTERVAL[range_token]
+
+        # GREATEST/LEAST clamp keeps malformed (>1 or <0) values inside
+        # the visible bins instead of silently skipping them.
+        where = (
+            "WHERE completed_at IS NOT NULL "
+            "AND cto_output ->> 'confidence' IS NOT NULL "
+            "AND cto_output ->> 'confidence' <> ''"
+        )
+        if interval is not None:
+            where += " AND completed_at >= NOW() - %s::interval"
+        sql = f"""
+        SELECT
+            GREATEST(0, LEAST(9,
+                FLOOR((cto_output ->> 'confidence')::float * 10)::int
+            )) AS bin,
+            COUNT(*)::int AS count
+        FROM pr_trace
+        {where}
+        GROUP BY bin
+        ORDER BY bin
+        """
+        params: tuple[Any, ...] = (interval,) if interval is not None else ()
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
+
+        counts = [0] * 10
+        for r in rows:
+            counts[r["bin"]] = r["count"]
+        return {
+            "range": range_token,
+            "bins": [
+                {"lo": round(i * 0.1, 1), "hi": round((i + 1) * 0.1, 1), "count": counts[i]}
+                for i in range(10)
+            ],
+            "total": sum(counts),
+        }
+
     async def stats_decisions(self, range_token: str = "24h") -> dict[str, Any]:
         """Aggregate decision distribution + avg confidence over a window.
 
