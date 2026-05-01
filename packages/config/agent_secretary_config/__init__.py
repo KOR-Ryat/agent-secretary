@@ -46,7 +46,6 @@ from agent_secretary_config.workflows import (
 )
 
 __all__ = [
-    "GitHubAppAuth",
     "ALL_WORKFLOWS",
     "CACHE_READ_DISCOUNT",
     "CACHE_WRITE_PREMIUM",
@@ -71,6 +70,7 @@ __all__ = [
     "WORKFLOW_PR_REVIEW_MONOLITHIC",
     "Channel",
     "ChannelResolution",
+    "GitHubAppAuth",
     "Repo",
     "ResolvedReviewRules",
     "ReviewRules",

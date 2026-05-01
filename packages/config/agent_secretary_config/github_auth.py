@@ -74,7 +74,7 @@ class GitHubAppAuth:
 
         token: str = data["token"]
         # expires_at is ISO 8601; cache until 5 min before actual expiry.
-        from datetime import datetime, timezone
+        from datetime import datetime
         expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
         cache_until = expires_at.timestamp() - 300
         return token, cache_until

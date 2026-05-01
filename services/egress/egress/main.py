@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
-from agent_secretary_config import GitHubAppAuth, MAX_DELIVERIES
+from agent_secretary_config import MAX_DELIVERIES, GitHubAppAuth
 from agent_secretary_schemas import ResultEvent
 from redis.asyncio import Redis
 
