@@ -1,4 +1,10 @@
 from agent_secretary_config.channel_names import CHANNEL_NAMES
+from agent_secretary_config.pricing import (
+    CACHE_READ_DISCOUNT,
+    CACHE_WRITE_PREMIUM,
+    MODEL_PRICES,
+    cost_usd,
+)
 from agent_secretary_config.review_rules import (
     DEPENDENCY_FILE_MARKERS,
     HIGH_RISK_PATH_TAGS,
@@ -40,10 +46,13 @@ from agent_secretary_config.workflows import (
 
 __all__ = [
     "ALL_WORKFLOWS",
+    "CACHE_READ_DISCOUNT",
+    "CACHE_WRITE_PREMIUM",
     "CHANNEL_NAMES",
     "DEPENDENCY_FILE_MARKERS",
     "HIGH_RISK_PATH_TAGS",
     "MAX_DELIVERIES",
+    "MODEL_PRICES",
     "SERVICE_MAP",
     "SLACK_KEYWORD_TO_WORKFLOW",
     "STREAM_RAW_EVENTS",
@@ -66,6 +75,7 @@ __all__ = [
     "Service",
     "all_repos",
     "classify_slack_text",
+    "cost_usd",
     "find_repo",
     "resolve_channel",
     "resolve_rules",

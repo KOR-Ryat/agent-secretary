@@ -129,6 +129,27 @@
       border-left: 1px solid var(--border);
     }
     .q-pair .q-dlq.nonzero { color: var(--escalate); font-weight: 600; }
+    .ops-row {
+      display: flex; gap: 14px; padding: 10px 24px;
+      border-bottom: 1px solid var(--border); background: var(--panel);
+      align-items: center; flex-wrap: wrap; font-size: 12px;
+    }
+    .ops-row .ops-label {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; min-width: 80px;
+    }
+    .ops-stat {
+      display: inline-flex; gap: 6px; align-items: baseline;
+      padding: 3px 10px; background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .ops-stat .ops-k {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ops-stat .ops-v { color: var(--fg); font-weight: 600; }
+    .ops-stat .ops-sub { color: var(--fg-muted); font-size: 11px; }
+    .ops-row .ops-warn { color: var(--warn); font-size: 11px; }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -206,12 +227,13 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
-    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb(); loadQueues();">↻ refresh</button>
+    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb(); loadOps(); loadQueues();">↻ refresh</button>
   </header>
   <div id="banner"></div>
   <div class="queues-row" id="queues" style="display:none"></div>
   <div class="kpi-row" id="kpi"></div>
   <div class="hist-row" id="hist"></div>
+  <div class="ops-row" id="ops" style="display:none"></div>
   <div class="ab-row" id="ab" style="display:none"></div>
   <main>
     <div class="left">
@@ -364,6 +386,60 @@
       loadKpi();
       loadHistogram();
       loadAb();
+      loadOps();
+    }
+
+    function fmtTokens(n) {
+      if (n == null) return '—';
+      if (n < 1_000) return String(n);
+      if (n < 1_000_000) return (n / 1_000).toFixed(1) + 'k';
+      return (n / 1_000_000).toFixed(2) + 'M';
+    }
+
+    function fmtMs(n) {
+      if (n == null) return '—';
+      if (n < 1_000) return n + 'ms';
+      return (n / 1000).toFixed(1) + 's';
+    }
+
+    async function loadOps() {
+      const el = document.getElementById('ops');
+      try {
+        const res = await fetch('/api/stats/operations?range=' + encodeURIComponent(kpiRange));
+        if (res.status === 503) { el.style.display = 'none'; return; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        if (!s.rows_considered) { el.style.display = 'none'; return; }
+        el.style.display = 'flex';
+        const t = s.totals;
+        const cost = '$' + (s.cost_usd || 0).toFixed(2);
+        const totalTokens = (t.input_tokens || 0) + (t.output_tokens || 0);
+        const cacheTokens = (t.cache_read_tokens || 0) + (t.cache_creation_tokens || 0);
+        const warn = (s.unknown_models || []).length
+          ? `<span class="ops-warn">unknown model(s): ${s.unknown_models.join(', ')}</span>`
+          : '';
+        el.innerHTML = `
+          <span class="ops-label">ops</span>
+          <span class="ops-stat">
+            <span class="ops-k">cost</span><span class="ops-v">${cost}</span>
+            <span class="ops-sub">${s.rows_considered} runs</span>
+          </span>
+          <span class="ops-stat">
+            <span class="ops-k">tokens</span><span class="ops-v">${fmtTokens(totalTokens)}</span>
+            <span class="ops-sub">in ${fmtTokens(t.input_tokens)} · out ${fmtTokens(t.output_tokens)}</span>
+          </span>
+          ${cacheTokens ? `<span class="ops-stat"><span class="ops-k">cache</span><span class="ops-v">${fmtTokens(cacheTokens)}</span></span>` : ''}
+          <span class="ops-stat">
+            <span class="ops-k">latency</span>
+            <span class="ops-v">${fmtMs(s.duration_ms_p50)}</span>
+            <span class="ops-sub">p50 · p95 ${fmtMs(s.duration_ms_p95)} · avg ${fmtMs(s.duration_ms_avg)}</span>
+          </span>
+          ${warn}
+        `;
+      } catch (e) {
+        el.style.display = 'flex';
+        el.innerHTML = `<span class="ops-label">ops</span><span class="hist-empty">불러오기 실패</span>`;
+      }
     }
 
     function fmtAge(s) {
@@ -600,11 +676,13 @@
     loadKpi();
     loadHistogram();
     loadAb();
+    loadOps();
     loadQueues();
     setInterval(loadList, 30000);  // refresh every 30s
     setInterval(loadKpi, 30000);
     setInterval(loadHistogram, 30000);
     setInterval(loadAb, 30000);
+    setInterval(loadOps, 30000);
     setInterval(loadQueues, 10000);  // queue health is operational — poll faster
   </script>
 </body>

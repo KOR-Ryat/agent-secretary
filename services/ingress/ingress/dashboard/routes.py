@@ -23,6 +23,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
 from ingress.dashboard.health import QueueHealth
+from ingress.dashboard.operations import aggregate_operations
 from ingress.dashboard.traces import (
     _DECISIONS,
     _RANGE_TO_INTERVAL,
@@ -145,6 +146,22 @@ def register_dashboard(
                 "pairs": [_serialize(p) for p in stats["pairs"]],
             }
         )
+
+    @router.get("/api/stats/operations")
+    async def stats_operations(
+        range: str = Query("24h", description="One of: 1h, 6h, 24h, 7d, 30d, all"),
+    ) -> JSONResponse:
+        if range not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400, detail=f"invalid range: {range!r}"
+            )
+        if trace_reader is None:
+            return JSONResponse(
+                {"error": "DATABASE_URL not configured"}, status_code=503
+            )
+        raw = await trace_reader.stats_operations(range)
+        agg = aggregate_operations(raw["rows"])
+        return JSONResponse({"range": raw["range"], **agg})
 
     @router.get("/api/health/queues")
     async def health_queues() -> JSONResponse:

@@ -471,6 +471,60 @@ def test_api_stats_ab_rejects_invalid_range():
     reader.stats_ab.assert_not_awaited()
 
 
+def test_api_stats_operations_passes_aggregate_through():
+    """Route fetches raw rows from the reader and shapes them with the
+    pure aggregator — verify the wiring."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.stats_operations.return_value = {
+        "range": "24h",
+        "rows": [
+            {
+                "token_usage": {"by_model": {
+                    "claude-opus-4-7": {
+                        "calls": 1, "input_tokens": 100_000, "output_tokens": 10_000,
+                        "cache_read_tokens": 0, "cache_creation_tokens": 0,
+                    },
+                }},
+                "duration_ms": 5000,
+                "workflow": "pr_review",
+            },
+        ],
+    }
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/operations?range=24h")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["range"] == "24h"
+    assert body["rows_considered"] == 1
+    assert body["totals"]["input_tokens"] == 100_000
+    assert body["cost_usd"] > 0
+    assert body["duration_ms_p50"] == 5000
+
+
+def test_api_stats_operations_rejects_invalid_range():
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/stats/operations?range=zzz")
+    assert res.status_code == 400
+    reader.stats_operations.assert_not_awaited()
+
+
+def test_api_stats_operations_503_when_no_db():
+    from fastapi.testclient import TestClient
+
+    app = _make_app(trace_reader=None)
+    client = TestClient(app)
+    res = client.get("/api/stats/operations?range=24h")
+    assert res.status_code == 503
+
+
 def test_api_stats_confidence_returns_bins():
     """Histogram endpoint serializes 10 bins with label + count."""
     from fastapi.testclient import TestClient

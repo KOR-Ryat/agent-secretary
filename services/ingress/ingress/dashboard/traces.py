@@ -174,6 +174,41 @@ class TraceReader:
             await cur.execute(_DETAIL_SQL, (task_id,))
             return await cur.fetchone()
 
+    async def stats_operations(self, range_token: str = "24h") -> dict[str, Any]:
+        """Aggregate token usage + latency over a window.
+
+        Returns:
+          - per-model token totals (input / output / cache_read / cache_create)
+          - estimated USD cost (computed in the API layer using
+            ``agent_secretary_config.cost_usd`` so price changes don't
+            require a database backfill)
+          - p50/p95/avg duration_ms across all completed runs
+
+        The DB query just returns rows; cost calc and percentile picks
+        happen in Python — keeps the SQL portable and the price table
+        in one place.
+        """
+        assert self._conn is not None, "TraceReader not connected"
+        if range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+        interval = _RANGE_TO_INTERVAL[range_token]
+
+        where = "WHERE completed_at IS NOT NULL"
+        params: tuple[Any, ...] = ()
+        if interval is not None:
+            where += " AND completed_at >= NOW() - %s::interval"
+            params = (interval,)
+
+        sql = f"""
+        SELECT token_usage, duration_ms, workflow
+        FROM pr_trace
+        {where}
+        """
+        async with self._conn.cursor() as cur:
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
+        return {"range": range_token, "rows": rows}
+
     async def list_ab_pair(self, event_id: str) -> list[dict[str, Any]]:
         """Return both primary + shadow traces for a single event_id.
 
