@@ -70,7 +70,9 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
       # Workspace skill (bare repo + worktree) needs persistent storage + git auth
       AGENT_WORKSPACE_DIR: /var/agent-workspace
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       # Report viewer URL — set so Slack messages can link to /static/reports/{task_id}
       REPORT_BASE_URL: ${REPORT_BASE_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -88,7 +90,9 @@ services:
       dockerfile: services/egress/Dockerfile
     environment:
       REDIS_URL: redis://redis:6379
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:

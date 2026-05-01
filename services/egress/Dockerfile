@@ -6,6 +6,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /usr/local/bin/
 
 COPY pyproject.toml uv.lock* ./
 COPY packages/schemas packages/schemas
+COPY packages/config packages/config
 COPY services/egress services/egress
 COPY services/ingress/pyproject.toml services/ingress/pyproject.toml
 COPY services/core/pyproject.toml services/core/pyproject.toml
