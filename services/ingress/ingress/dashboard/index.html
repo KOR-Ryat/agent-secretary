@@ -646,7 +646,7 @@
         const rate = (100 * s.agreement_rate).toFixed(0) + '%';
         const diffs = s.pairs.filter(p => p.primary_decision !== p.shadow_decision).slice(0, 6);
         const diffLinks = diffs.map(p =>
-          `<a class="diff" href="/compare/${encodeURIComponent(p.event_id)}" title="primary=${p.primary_decision || '—'} · shadow=${p.shadow_decision || '—'}">
+          `<a class="diff" href="/static/dashboard/compare/${encodeURIComponent(p.event_id)}" title="primary=${p.primary_decision || '—'} · shadow=${p.shadow_decision || '—'}">
             ${escapeHtml((p.event_id || '').slice(0, 12))}
           </a>`
         ).join(' ');
@@ -740,7 +740,7 @@
           const summary = (item.summary_markdown || '').slice(0, 160);
           const sel = item.task_id === selectedTaskId ? ' selected' : '';
           const compareLink = (item.workflow === 'pr_review' || item.workflow === 'pr_review_monolithic') && item.event_id
-            ? `<a class="compare-link" href="/compare/${encodeURIComponent(item.event_id)}" onclick="event.stopPropagation()" title="A/B 비교">A/B ↗</a>`
+            ? `<a class="compare-link" href="/static/dashboard/compare/${encodeURIComponent(item.event_id)}" onclick="event.stopPropagation()" title="A/B 비교">A/B ↗</a>`
             : '';
           return `
             <a class="row${sel}" data-id="${item.task_id}" onclick="loadDetail('${item.task_id}'); return false;" href="#${item.task_id}">

@@ -1,17 +1,14 @@
 """Dashboard FastAPI routes.
 
-  - GET  /                              → dashboard index.html
-  - GET  /api/traces                    → recent traces (paginated)
-  - GET  /api/traces/{task_id}          → full trace detail
-  - GET  /api/stats/decisions?range=…   → decision distribution + avg conf
+  - GET  /                                   → 302 redirect → /static/dashboard/
+  - GET  /static/dashboard/                  → dashboard index.html
+  - GET  /static/dashboard/compare/{event_id}→ A/B compare page
+  - GET  /api/traces                         → recent traces (paginated)
+  - GET  /api/traces/{task_id}               → full trace detail
+  - GET  /api/stats/decisions?range=…        → decision distribution + avg conf
 
-If `DATABASE_URL` is unset (e.g. dev without Postgres), `/` still serves
-the HTML but the API endpoints respond 503 — the UI displays a banner.
-
-The `/static/` URL prefix is intentionally NOT mounted here — it's
-reserved for cross-feature served content (e.g. `/static/reports/{id}`
-for rendered workflow reports — see issue #3). The dashboard SPA is
-self-contained (inline styles + script) so no asset mount is needed.
+If `DATABASE_URL` is unset (e.g. dev without Postgres), `/static/dashboard/`
+still serves the HTML but the API endpoints respond 503 — the UI displays a banner.
 """
 
 from __future__ import annotations
@@ -20,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from ingress.dashboard.health import QueueHealth
 from ingress.dashboard.operations import aggregate_operations
@@ -46,6 +43,10 @@ def register_dashboard(
     router = APIRouter(tags=["dashboard"])
 
     @router.get("/", include_in_schema=False)
+    async def root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/static/dashboard/", status_code=302)
+
+    @router.get("/static/dashboard/", include_in_schema=False)
     async def index() -> FileResponse:
         return FileResponse(_INDEX_HTML, media_type="text/html")
 
@@ -100,10 +101,8 @@ def register_dashboard(
             raise HTTPException(status_code=404, detail="trace not found")
         return JSONResponse(_serialize(row))
 
-    @router.get("/compare/{event_id}", include_in_schema=False)
+    @router.get("/static/dashboard/compare/{event_id}", include_in_schema=False)
     async def compare_page(event_id: str) -> FileResponse:
-        # The page itself is static; the event_id is read client-side
-        # from window.location.pathname. Matches the trace detail UX.
         del event_id
         return FileResponse(_COMPARE_HTML, media_type="text/html")
 

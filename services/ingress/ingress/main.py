@@ -93,7 +93,7 @@ def _build_app(settings: Settings) -> FastAPI:
 
     app = FastAPI(title="agent-secretary ingress", lifespan=lifespan)
 
-    @app.get("/health")
+    @app.get("/public/health")
     async def health() -> dict:
         return {"status": "ok"}
 

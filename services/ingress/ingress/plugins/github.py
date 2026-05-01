@@ -30,7 +30,7 @@ class GithubChannelParser(ChannelParser):
         self._publisher = publisher
 
     def register_routes(self, router: APIRouter) -> None:
-        @router.post("/channels/github/webhook")
+        @router.post("/public/channels/github/webhook")
         async def webhook(
             request: Request,
             x_github_event: str = Header(...),
