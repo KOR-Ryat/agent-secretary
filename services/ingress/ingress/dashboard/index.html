@@ -104,6 +104,31 @@
       margin-left: 8px;
     }
     .row .compare-link:hover { background: var(--panel-2); }
+    .queues-row {
+      display: flex; gap: 10px; padding: 10px 24px;
+      border-bottom: 1px solid var(--border); background: var(--panel-2);
+      align-items: center; flex-wrap: wrap;
+    }
+    .queues-row .q-label {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; min-width: 100px;
+    }
+    .q-pair {
+      display: inline-flex; gap: 6px; align-items: center;
+      padding: 4px 10px; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 4px; font-size: 12px;
+      font-family: ui-monospace, "SF Mono", monospace;
+    }
+    .q-pair .q-name { color: var(--fg-muted); }
+    .q-pair .q-depth { color: var(--fg); font-weight: 600; }
+    .q-pair .q-age { color: var(--fg-muted); font-size: 11px; }
+    .q-pair.alert { border-color: var(--warn); background: rgba(210,153,34,0.10); }
+    .q-pair.crit  { border-color: var(--escalate); background: rgba(248,81,73,0.10); }
+    .q-pair .q-pending {
+      color: var(--warn); font-size: 11px; padding-left: 6px;
+      border-left: 1px solid var(--border);
+    }
+    .q-pair .q-dlq.nonzero { color: var(--escalate); font-weight: 600; }
     .banner {
       background: var(--panel); border-bottom: 1px solid var(--border);
       padding: 10px 16px; color: var(--warn); font-size: 13px;
@@ -181,9 +206,10 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
-    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb();">↻ refresh</button>
+    <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb(); loadQueues();">↻ refresh</button>
   </header>
   <div id="banner"></div>
+  <div class="queues-row" id="queues" style="display:none"></div>
   <div class="kpi-row" id="kpi"></div>
   <div class="hist-row" id="hist"></div>
   <div class="ab-row" id="ab" style="display:none"></div>
@@ -338,6 +364,52 @@
       loadKpi();
       loadHistogram();
       loadAb();
+    }
+
+    function fmtAge(s) {
+      if (s == null) return '';
+      if (s < 60) return s.toFixed(0) + 's';
+      if (s < 3600) return (s / 60).toFixed(0) + 'm';
+      if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+      return (s / 86400).toFixed(1) + 'd';
+    }
+
+    async function loadQueues() {
+      const el = document.getElementById('queues');
+      try {
+        const res = await fetch('/api/health/queues');
+        if (res.status === 503) { el.style.display = 'none'; return; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        el.style.display = 'flex';
+        const pairs = s.pairs.map(p => {
+          const live = p.live, dlq = p.dlq;
+          const pending = (live.groups || []).reduce((a, g) => a + (g.pending || 0), 0);
+          // Severity heuristics:
+          //   crit  if anything in DLQ, or pending > 100, or oldest age > 1h
+          //   alert if depth > 50 or oldest age > 5m
+          let cls = '';
+          if (dlq.length > 0 || pending > 100 || (live.oldest_age_seconds || 0) > 3600) {
+            cls = 'crit';
+          } else if (live.length > 50 || (live.oldest_age_seconds || 0) > 300) {
+            cls = 'alert';
+          }
+          const ageStr = live.length ? `· age ${fmtAge(live.oldest_age_seconds)}` : '';
+          const pendStr = pending ? `<span class="q-pending">pending ${pending}</span>` : '';
+          const dlqClass = dlq.length ? 'q-dlq nonzero' : 'q-dlq';
+          return `<span class="q-pair ${cls}">
+            <span class="q-name">${live.name}</span>
+            <span class="q-depth">${live.length}</span>
+            <span class="q-age">${ageStr}</span>
+            ${pendStr}
+            <span class="${dlqClass}" title="DLQ depth">dlq ${dlq.length}</span>
+          </span>`;
+        }).join('');
+        el.innerHTML = `<span class="q-label">queues</span>${pairs}`;
+      } catch (e) {
+        el.style.display = 'flex';
+        el.innerHTML = `<span class="q-label">queues</span><span class="hist-empty">불러오기 실패</span>`;
+      }
     }
 
     async function loadAb() {
@@ -528,10 +600,12 @@
     loadKpi();
     loadHistogram();
     loadAb();
+    loadQueues();
     setInterval(loadList, 30000);  // refresh every 30s
     setInterval(loadKpi, 30000);
     setInterval(loadHistogram, 30000);
     setInterval(loadAb, 30000);
+    setInterval(loadQueues, 10000);  // queue health is operational — poll faster
   </script>
 </body>
 </html>

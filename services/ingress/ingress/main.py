@@ -13,6 +13,7 @@ from fastapi import APIRouter, FastAPI
 from redis.asyncio import Redis
 
 from ingress.config import Settings
+from ingress.dashboard.health import QueueHealth
 from ingress.dashboard.reports import register_reports
 from ingress.dashboard.routes import register_dashboard
 from ingress.dashboard.traces import TraceReader
@@ -48,6 +49,7 @@ def _build_app(settings: Settings) -> FastAPI:
     trace_reader: TraceReader | None = (
         TraceReader(settings.database_url) if settings.database_url else None
     )
+    queue_health = QueueHealth(settings.redis_url)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -72,6 +74,11 @@ def _build_app(settings: Settings) -> FastAPI:
                 log.warning("ingress.dashboard.db_unavailable", error=str(e))
 
         try:
+            await queue_health.connect()
+        except Exception as e:
+            log.warning("ingress.dashboard.redis_unavailable", error=str(e))
+
+        try:
             yield
         finally:
             for plugin in plugins:
@@ -81,6 +88,7 @@ def _build_app(settings: Settings) -> FastAPI:
                     log.warning("ingress.plugin.stop_failed", plugin=plugin.name, error=str(e))
             if trace_reader is not None:
                 await trace_reader.close()
+            await queue_health.close()
             await publisher.close()
 
     app = FastAPI(title="agent-secretary ingress", lifespan=lifespan)
@@ -89,7 +97,7 @@ def _build_app(settings: Settings) -> FastAPI:
     async def health() -> dict:
         return {"status": "ok"}
 
-    register_dashboard(app, trace_reader)
+    register_dashboard(app, trace_reader, queue_health)
     register_reports(app, trace_reader)
 
     return app

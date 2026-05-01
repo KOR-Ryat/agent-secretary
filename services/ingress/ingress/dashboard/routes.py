@@ -22,6 +22,7 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
+from ingress.dashboard.health import QueueHealth
 from ingress.dashboard.traces import (
     _DECISIONS,
     _RANGE_TO_INTERVAL,
@@ -36,7 +37,11 @@ _INDEX_HTML = Path(__file__).parent / "index.html"
 _COMPARE_HTML = Path(__file__).parent / "compare.html"
 
 
-def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
+def register_dashboard(
+    app: FastAPI,
+    trace_reader: TraceReader | None,
+    queue_health: QueueHealth | None = None,
+) -> None:
     router = APIRouter(tags=["dashboard"])
 
     @router.get("/", include_in_schema=False)
@@ -140,6 +145,22 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
                 "pairs": [_serialize(p) for p in stats["pairs"]],
             }
         )
+
+    @router.get("/api/health/queues")
+    async def health_queues() -> JSONResponse:
+        if queue_health is None:
+            return JSONResponse(
+                {"error": "queue health not available"}, status_code=503
+            )
+        try:
+            return JSONResponse(await queue_health.snapshot())
+        except Exception as e:
+            # Broker errors (connection drops, RESP parse) → 503 so the
+            # UI hides the card instead of showing a generic 500.
+            log.warning("dashboard.queue_health.snapshot_failed", error=str(e))
+            return JSONResponse(
+                {"error": f"snapshot failed: {e}"}, status_code=503
+            )
 
     @router.get("/api/stats/confidence")
     async def stats_confidence(

@@ -15,12 +15,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 
-def _make_app(trace_reader=None):
+def _make_app(trace_reader=None, queue_health=None):
     from fastapi import FastAPI
     from ingress.dashboard.routes import register_dashboard
 
     app = FastAPI()
-    register_dashboard(app, trace_reader)
+    register_dashboard(app, trace_reader, queue_health)
     return app
 
 
@@ -233,6 +233,107 @@ def test_api_stats_decisions_default_range_is_24h():
     res = client.get("/api/stats/decisions")
     assert res.status_code == 200
     reader.stats_decisions.assert_awaited_once_with("24h")
+
+
+def test_api_health_queues_503_when_no_redis():
+    """If queue_health isn't injected (e.g. dev without Redis), the
+    endpoint must 503 — not 500 — so the UI can hide the card."""
+    from fastapi.testclient import TestClient
+
+    app = _make_app(trace_reader=None, queue_health=None)
+    client = TestClient(app)
+    res = client.get("/api/health/queues")
+    assert res.status_code == 503
+
+
+def test_api_health_queues_returns_snapshot():
+    from fastapi.testclient import TestClient
+
+    health = AsyncMock()
+    health.snapshot.return_value = {
+        "now_ms": 1700000000000,
+        "total_depth": 5,
+        "total_dlq": 1,
+        "pairs": [
+            {
+                "live": {
+                    "name": "raw_events",
+                    "length": 3,
+                    "oldest_age_seconds": 1.5,
+                    "groups": [
+                        {"name": "core", "pending": 2, "consumers": 1, "lag": 1},
+                    ],
+                },
+                "dlq": {"name": "raw_events_dlq", "length": 0,
+                        "oldest_age_seconds": None, "groups": []},
+            },
+            {
+                "live": {
+                    "name": "tasks", "length": 2, "oldest_age_seconds": 0.4,
+                    "groups": [{"name": "agents", "pending": 0, "consumers": 1, "lag": 0}],
+                },
+                "dlq": {"name": "tasks_dlq", "length": 1,
+                        "oldest_age_seconds": 600.0, "groups": []},
+            },
+            {
+                "live": {"name": "results", "length": 0,
+                         "oldest_age_seconds": None, "groups": []},
+                "dlq": {"name": "results_dlq", "length": 0,
+                        "oldest_age_seconds": None, "groups": []},
+            },
+        ],
+    }
+
+    app = _make_app(queue_health=health)
+    client = TestClient(app)
+    res = client.get("/api/health/queues")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total_depth"] == 5
+    assert body["total_dlq"] == 1
+    # The DLQ with depth=1 is what an operator most needs to see.
+    dlq_with_msg = body["pairs"][1]["dlq"]
+    assert dlq_with_msg["name"] == "tasks_dlq"
+    assert dlq_with_msg["length"] == 1
+    health.snapshot.assert_awaited_once()
+
+
+def test_api_health_queues_503_on_snapshot_failure():
+    """Broker errors must not 500 — return 503 so the card stays hidden."""
+    from fastapi.testclient import TestClient
+
+    health = AsyncMock()
+    health.snapshot.side_effect = RuntimeError("redis: connection refused")
+
+    app = _make_app(queue_health=health)
+    client = TestClient(app)
+    res = client.get("/api/health/queues")
+    assert res.status_code == 503
+    assert "snapshot failed" in res.json()["error"]
+
+
+def test_age_seconds_from_id_parses_redis_stream_id():
+    from ingress.dashboard.health import _age_seconds_from_id
+
+    # Stream ID format: <unix_ms>-<seq>
+    age = _age_seconds_from_id("1700000000000-0", 1700000005000)
+    assert age == 5.0
+
+
+def test_age_seconds_from_id_handles_clock_skew():
+    """If oldest entry's timestamp is *ahead* of now (clock skew), clamp
+    to 0 instead of returning a negative number."""
+    from ingress.dashboard.health import _age_seconds_from_id
+
+    age = _age_seconds_from_id("1700000010000-0", 1700000005000)
+    assert age == 0.0
+
+
+def test_age_seconds_from_id_returns_none_for_garbage():
+    from ingress.dashboard.health import _age_seconds_from_id
+
+    assert _age_seconds_from_id("not-an-id", 0) is None
+    assert _age_seconds_from_id("abc-xyz", 0) is None
 
 
 def test_compare_page_serves_html():
