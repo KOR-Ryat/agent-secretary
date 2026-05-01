@@ -60,6 +60,7 @@ def _build_list_sql(
     decision: str | None,
     workflow: str | None,
     range_token: str | None,
+    q: str | None = None,
 ) -> tuple[str, list[Any]]:
     """Compose the trace-list query + bind values from validated filters.
 
@@ -83,6 +84,17 @@ def _build_list_sql(
         interval = _RANGE_TO_INTERVAL[range_token]
         where_clauses.append("created_at >= NOW() - %s::interval")
         params.append(interval)
+
+    if q:
+        # OR across the IDs and the JSONB-as-text view of pr_metadata.
+        # ILIKE works on TEXT (task_id/event_id) directly; pr_metadata
+        # is JSONB and gets coerced via ::text so substring matches hit
+        # repo full_name + PR title without per-field SQL fan-out.
+        like = f"%{q}%"
+        where_clauses.append(
+            "(task_id ILIKE %s OR event_id ILIKE %s OR pr_metadata::text ILIKE %s)"
+        )
+        params.extend([like, like, like])
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
     sql = (
@@ -150,6 +162,7 @@ class TraceReader:
         decision: str | None = None,
         workflow: str | None = None,
         range_token: str | None = None,
+        q: str | None = None,
     ) -> list[dict[str, Any]]:
         assert self._conn is not None, "TraceReader not connected"
         if decision is not None and decision not in _DECISIONS:
@@ -160,7 +173,7 @@ class TraceReader:
             raise ValueError(f"unknown range token: {range_token!r}")
 
         sql, params = _build_list_sql(
-            decision=decision, workflow=workflow, range_token=range_token
+            decision=decision, workflow=workflow, range_token=range_token, q=q
         )
         params.extend([limit, offset])
         async with self._conn.cursor() as cur:

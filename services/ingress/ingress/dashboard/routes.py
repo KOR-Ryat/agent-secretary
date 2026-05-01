@@ -56,6 +56,7 @@ def register_dashboard(
         decision: str | None = Query(None),
         workflow: str | None = Query(None),
         range: str | None = Query(None),
+        q: str | None = Query(None, max_length=200),
     ) -> JSONResponse:
         if decision is not None and decision not in _DECISIONS:
             raise HTTPException(
@@ -73,12 +74,18 @@ def register_dashboard(
             return JSONResponse(
                 {"error": "DATABASE_URL not configured"}, status_code=503
             )
+        # Treat empty/whitespace search as "no search" so the param
+        # round-trips cleanly when the URL keeps a stale ?q= behind.
+        q_clean = q.strip() if q else None
+        if q_clean == "":
+            q_clean = None
         rows = await trace_reader.list_recent(
             limit=limit,
             offset=offset,
             decision=decision,
             workflow=workflow,
             range_token=range,
+            q=q_clean,
         )
         return JSONResponse({"items": [_serialize(r) for r in rows]})
 

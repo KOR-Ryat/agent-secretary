@@ -201,6 +201,17 @@
       padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
     }
     button.refresh:hover { background: var(--panel); }
+    input.search {
+      background: var(--panel-2); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px; font-size: 12px; width: 280px;
+      font-family: inherit;
+    }
+    input.search:focus {
+      outline: none; border-color: var(--link);
+      background: var(--bg);
+    }
+    input.search::placeholder { color: var(--fg-muted); }
     .filter-bar {
       display: flex; gap: 8px; padding: 10px 16px;
       border-bottom: 1px solid var(--border); background: var(--panel);
@@ -227,6 +238,13 @@
   <header>
     <h1>agent-secretary</h1>
     <span class="sub">trace dashboard</span>
+    <input
+      id="search"
+      type="search"
+      class="search"
+      placeholder="search task_id / event_id / repo / title…"
+      oninput="onSearchInput(event)"
+    />
     <button class="refresh" onclick="loadList(); loadKpi(); loadHistogram(); loadAb(); loadOps(); loadQueues();">↻ refresh</button>
   </header>
   <div id="banner"></div>
@@ -278,7 +296,7 @@
 
     // List filter state. Persisted in the URL query string so reloads /
     // shared links keep the same view.
-    const filters = { decision: '', workflow: '', range: '' };
+    const filters = { decision: '', workflow: '', range: '', q: '' };
 
     function readFiltersFromUrl() {
       const q = new URLSearchParams(location.search);
@@ -292,6 +310,15 @@
       document.getElementById('f-decision').value = filters.decision || '';
       document.getElementById('f-workflow').value = filters.workflow || '';
       document.getElementById('f-range').value = filters.range || '';
+      document.getElementById('search').value = filters.q || '';
+    }
+
+    let searchDebounce = null;
+    function onSearchInput(event) {
+      clearTimeout(searchDebounce);
+      const value = event.target.value;
+      // 250ms debounce — keystrokes shouldn't each fire a query.
+      searchDebounce = setTimeout(() => setFilter('q', value), 250);
     }
 
     function writeFiltersToUrl() {
@@ -314,6 +341,7 @@
       filters.decision = '';
       filters.workflow = '';
       filters.range = '';
+      filters.q = '';
       syncFilterUI();
       writeFiltersToUrl();
       loadList();

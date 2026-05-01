@@ -153,6 +153,7 @@ def test_api_traces_passes_filters_through():
         decision="auto-merge",
         workflow="pr_review",
         range_token="24h",
+        q=None,
     )
 
 
@@ -172,6 +173,56 @@ def test_api_traces_rejects_unknown_filter_values():
         res = client.get(url)
         assert res.status_code == 400, url
     reader.list_recent.assert_not_awaited()
+
+
+def test_api_traces_search_param_passes_through():
+    """q is forwarded as range_token sibling, with whitespace stripped."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_recent.return_value = []
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/traces?q=  mesher-labs/project-201  ")
+    assert res.status_code == 200
+    reader.list_recent.assert_awaited_once_with(
+        limit=50, offset=0,
+        decision=None, workflow=None, range_token=None,
+        q="mesher-labs/project-201",
+    )
+
+
+def test_api_traces_empty_search_treated_as_no_search():
+    """?q= alone should not constrain — no SQL substring filter."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_recent.return_value = []
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get("/api/traces?q=")
+    assert res.status_code == 200
+    reader.list_recent.assert_awaited_once_with(
+        limit=50, offset=0,
+        decision=None, workflow=None, range_token=None,
+        q=None,
+    )
+
+
+def test_build_list_sql_search_adds_three_ilike_params():
+    """The OR(ilike) lookup binds the same %term% three times so callers
+    don't have to construct the wildcard form themselves."""
+    from ingress.dashboard.traces import _build_list_sql
+
+    sql, params = _build_list_sql(
+        decision=None, workflow=None, range_token=None, q="abc"
+    )
+    assert "ILIKE" in sql
+    assert sql.count("ILIKE") == 3
+    # First three params are the search term wildcards (LIMIT/OFFSET appended later).
+    assert params == ["%abc%", "%abc%", "%abc%"]
 
 
 def test_build_list_sql_no_filters():
