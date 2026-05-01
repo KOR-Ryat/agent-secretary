@@ -26,7 +26,6 @@ def _settings(prompts_dir: Path):
     return Settings(
         redis_url="redis://x",
         database_url=None,
-        anthropic_api_key="dummy",
         log_level="WARNING",
         consumer_group="t",
         consumer_name="t1",

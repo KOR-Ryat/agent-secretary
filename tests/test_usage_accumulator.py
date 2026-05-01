@@ -119,12 +119,37 @@ async def test_concurrent_tasks_dont_share_accumulator():
     assert b == 7
 
 
-def test_persona_base_records_when_scope_active(monkeypatch):
-    """PersonaAgent.call should append to the active accumulator. We
-    stub the Anthropic client to avoid a real API call."""
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
+def _patch_query_with_canned_json(monkeypatch, model: str, json_text: str,
+                                   *, input_tokens: int = 42, output_tokens: int = 7) -> None:
+    """Stub agents.llm.query to yield one ResultMessage with the given counts."""
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
+    async def fake_query(*, prompt, options):
+        text = json_text
+        yield AssistantMessage(content=[TextBlock(text=text)], model=model)
+        yield ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="t",
+            result=text,
+            model_usage={
+                model: {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cache_read_input_tokens": 0,
+                    "cache_creation_input_tokens": 0,
+                },
+            },
+        )
+
+    monkeypatch.setattr("agents.llm.query", fake_query)
+
+
+def test_persona_base_records_when_scope_active(monkeypatch):
+    """PersonaAgent.call should append to the active accumulator."""
     from agents.personas._base import PersonaAgent
     from agents.usage import usage_scope
     from pydantic import BaseModel
@@ -140,16 +165,11 @@ def test_persona_base_records_when_scope_active(monkeypatch):
 
     # Bypass __init__ (it reads a prompt file) — fabricate the agent.
     p = _P.__new__(_P)
-    text_block = SimpleNamespace(type="text", text='```json\n{"ok": true}\n```')
-    fake_response = SimpleNamespace(
-        content=[text_block],
-        usage=SimpleNamespace(
-            input_tokens=42, output_tokens=7,
-            cache_read_input_tokens=0, cache_creation_input_tokens=0,
-        ),
-    )
-    p._client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
     p._system_prompt = "system"
+    _patch_query_with_canned_json(
+        monkeypatch, "claude-test", '```json\n{"ok": true}\n```',
+        input_tokens=42, output_tokens=7,
+    )
 
     async def _go():
         with usage_scope() as acc:
@@ -163,12 +183,9 @@ def test_persona_base_records_when_scope_active(monkeypatch):
     assert totals["by_model"]["claude-test"]["calls"] == 1
 
 
-def test_persona_base_does_not_crash_without_scope():
+def test_persona_base_does_not_crash_without_scope(monkeypatch):
     """Outside usage_scope() (e.g. unit tests calling PersonaAgent
     directly) the call must still succeed — recording is a no-op."""
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
     from agents.personas._base import PersonaAgent
     from pydantic import BaseModel
 
@@ -182,13 +199,10 @@ def test_persona_base_does_not_crash_without_scope():
         model = "claude-test"
 
     p = _P.__new__(_P)
-    text_block = SimpleNamespace(type="text", text='```json\n{"ok": true}\n```')
-    fake_response = SimpleNamespace(
-        content=[text_block],
-        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
-    )
-    p._client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
     p._system_prompt = "sys"
+    _patch_query_with_canned_json(
+        monkeypatch, "claude-test", '```json\n{"ok": true}\n```',
+    )
 
     out = asyncio.run(p.call({}))
     assert out.ok is True

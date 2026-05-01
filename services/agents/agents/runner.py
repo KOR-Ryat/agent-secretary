@@ -9,7 +9,6 @@ from agent_secretary_config import (
     WORKFLOW_PR_REVIEW,
     WORKFLOW_PR_REVIEW_MONOLITHIC,
 )
-from anthropic import AsyncAnthropic
 
 from agents.config import Settings
 from agents.workflows.code_analyze import CodeAnalyzeRunner
@@ -25,9 +24,9 @@ class UnknownWorkflowError(Exception):
 
 
 class WorkflowRunner:
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
-        self._pr_review = PrReviewRunner(client, settings)
-        self._monolithic = MonolithicReviewRunner(client, settings)
+    def __init__(self, settings: Settings) -> None:
+        self._pr_review = PrReviewRunner(settings)
+        self._monolithic = MonolithicReviewRunner(settings)
         self._code_analyze = CodeAnalyzeRunner(settings)
         self._placeholder = PlaceholderRunner()
 

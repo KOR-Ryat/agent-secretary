@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anthropic import AsyncAnthropic
-
 from agents.personas._base import PersonaAgent
 from agents.personas.leads.compatibility import CompatibilityLead
 from agents.personas.leads.ops import OpsLead
@@ -59,11 +57,10 @@ SPECIALIST_TO_LEAD: dict[str, str] = {
 
 def build_lead(
     name: str,
-    client: AsyncAnthropic,
     prompts_dir: Path,
     model: str,
 ) -> PersonaAgent | None:
     cls = LEAD_BY_NAME.get(name)
     if cls is None:
         return None
-    return cls(client, prompts_dir, model)
+    return cls(prompts_dir, model)

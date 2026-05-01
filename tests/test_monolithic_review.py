@@ -1,19 +1,16 @@
 """Tests for the pr_review_monolithic workflow (issue #2 Case B).
 
-Mocks `AsyncAnthropic.messages.create` to return canned JSON; the
-workflow runner is responsible for parsing + attaching the
+Mocks ``claude_agent_sdk.query`` (via ``agents.llm``) to return canned
+JSON; the workflow runner is responsible for parsing + attaching the
 deterministically-computed risk_metadata.
 """
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
+from _llm_fake import fake_query_factory, install
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_DIR = REPO_ROOT / "prompts"
@@ -25,7 +22,6 @@ def _settings(prompts_dir: Path):
     return Settings(
         redis_url="redis://x",
         database_url=None,
-        anthropic_api_key="dummy",
         log_level="WARNING",
         consumer_group="t",
         consumer_name="t1",
@@ -36,18 +32,15 @@ def _settings(prompts_dir: Path):
     )
 
 
-def _mock_client_with(canned_json: dict):
-    response = SimpleNamespace(
-        content=[
-            SimpleNamespace(
-                type="text",
-                text=f"```json\n{json.dumps(canned_json, ensure_ascii=False)}\n```",
-            )
-        ],
-        usage=SimpleNamespace(input_tokens=100, output_tokens=200),
-    )
-    return SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=response))
+def _install_canned_monolithic(monkeypatch, canned_json: dict) -> None:
+    """The monolithic runner identifies as ``"unknown"`` because its
+    system prompt header doesn't match any persona regex — we route
+    everything through a single bucket."""
+    install(
+        monkeypatch,
+        fake_query_factory(
+            {"unknown": canned_json}, classify=lambda _system: "unknown"
+        ),
     )
 
 
@@ -136,7 +129,6 @@ def test_parse_output_rejects_non_json_blob():
 async def test_runner_returns_cto_output_and_risk_separately(monkeypatch, tmp_path):
     """`run()` returns a dict where cto_output carries the parsed monolithic
     output and risk_metadata is alongside it (matching trace store layout)."""
-    os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
     monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from agents.workflows.monolithic_review import MonolithicReviewRunner
@@ -147,8 +139,8 @@ async def test_runner_returns_cto_output_and_risk_separately(monkeypatch, tmp_pa
         "reasoning": "변경은 단순하고 우려 없음.",
         "findings": [],
     }
-    client = _mock_client_with(canned)
-    runner = MonolithicReviewRunner(client, _settings(PROMPTS_DIR))
+    _install_canned_monolithic(monkeypatch, canned)
+    runner = MonolithicReviewRunner(_settings(PROMPTS_DIR))
 
     result = await runner.run(
         {
@@ -174,7 +166,6 @@ async def test_runner_returns_cto_output_and_risk_separately(monkeypatch, tmp_pa
 @pytest.mark.asyncio
 async def test_runner_dispatches_via_workflow_runner(monkeypatch, tmp_path):
     """WorkflowRunner routes the new workflow id to the monolithic runner."""
-    os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
     monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from agent_secretary_config import WORKFLOW_PR_REVIEW_MONOLITHIC
@@ -186,8 +177,8 @@ async def test_runner_dispatches_via_workflow_runner(monkeypatch, tmp_path):
         "reasoning": "ok",
         "findings": [],
     }
-    client = _mock_client_with(canned)
-    wr = WorkflowRunner(client, _settings(PROMPTS_DIR))
+    _install_canned_monolithic(monkeypatch, canned)
+    wr = WorkflowRunner(_settings(PROMPTS_DIR))
 
     out = await wr.run(
         WORKFLOW_PR_REVIEW_MONOLITHIC,
