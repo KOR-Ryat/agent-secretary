@@ -116,6 +116,26 @@
       padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
     }
     button.refresh:hover { background: var(--panel); }
+    .filter-bar {
+      display: flex; gap: 8px; padding: 10px 16px;
+      border-bottom: 1px solid var(--border); background: var(--panel);
+      align-items: center; flex-wrap: wrap;
+    }
+    .filter-bar select {
+      background: var(--panel-2); color: var(--fg); border: 1px solid var(--border);
+      padding: 4px 8px; border-radius: 4px; font-size: 12px;
+    }
+    .filter-bar .label-tag {
+      color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .filter-bar button.clear {
+      background: transparent; border: none; color: var(--link);
+      cursor: pointer; font-size: 12px;
+    }
+    .left { display: flex; flex-direction: column; }
+    .left > .filter-bar { flex: 0 0 auto; }
+    .left > .list-rows { flex: 1 1 auto; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -127,7 +147,38 @@
   <div id="banner"></div>
   <div class="kpi-row" id="kpi"></div>
   <main>
-    <div class="left" id="list"><div class="empty">로딩 중…</div></div>
+    <div class="left">
+      <div class="filter-bar">
+        <span class="label-tag">decision</span>
+        <select id="f-decision" onchange="setFilter('decision', this.value)">
+          <option value="">all</option>
+          <option value="auto-merge">auto-merge</option>
+          <option value="request-changes">request-changes</option>
+          <option value="escalate-to-human">escalate-to-human</option>
+          <option value="none">(no decision)</option>
+        </select>
+        <span class="label-tag">workflow</span>
+        <select id="f-workflow" onchange="setFilter('workflow', this.value)">
+          <option value="">all</option>
+          <option value="pr_review">pr_review</option>
+          <option value="pr_review_monolithic">pr_review_monolithic</option>
+          <option value="code_analyze">code_analyze</option>
+          <option value="code_modify">code_modify</option>
+          <option value="linear_issue">linear_issue</option>
+        </select>
+        <span class="label-tag">range</span>
+        <select id="f-range" onchange="setFilter('range', this.value)">
+          <option value="">all-time</option>
+          <option value="1h">1h</option>
+          <option value="6h">6h</option>
+          <option value="24h">24h</option>
+          <option value="7d">7d</option>
+          <option value="30d">30d</option>
+        </select>
+        <button class="clear" onclick="clearFilters()">clear</button>
+      </div>
+      <div class="list-rows" id="list"><div class="empty">로딩 중…</div></div>
+    </div>
     <div class="right" id="detail"><div class="empty">왼쪽에서 항목을 선택하세요.</div></div>
   </main>
 
@@ -135,6 +186,57 @@
     let selectedTaskId = null;
     let kpiRange = '24h';
     const RANGE_LABELS = { '1h': '최근 1시간', '6h': '최근 6시간', '24h': '최근 24시간', '7d': '최근 7일', '30d': '최근 30일', 'all': '전체' };
+
+    // List filter state. Persisted in the URL query string so reloads /
+    // shared links keep the same view.
+    const filters = { decision: '', workflow: '', range: '' };
+
+    function readFiltersFromUrl() {
+      const q = new URLSearchParams(location.search);
+      for (const k of Object.keys(filters)) {
+        const v = q.get(k);
+        if (v != null) filters[k] = v;
+      }
+    }
+
+    function syncFilterUI() {
+      document.getElementById('f-decision').value = filters.decision || '';
+      document.getElementById('f-workflow').value = filters.workflow || '';
+      document.getElementById('f-range').value = filters.range || '';
+    }
+
+    function writeFiltersToUrl() {
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(filters)) {
+        if (v) q.set(k, v);
+      }
+      const qs = q.toString();
+      const next = qs ? '?' + qs : location.pathname;
+      history.replaceState(null, '', next);
+    }
+
+    function setFilter(key, value) {
+      filters[key] = value || '';
+      writeFiltersToUrl();
+      loadList();
+    }
+
+    function clearFilters() {
+      filters.decision = '';
+      filters.workflow = '';
+      filters.range = '';
+      syncFilterUI();
+      writeFiltersToUrl();
+      loadList();
+    }
+
+    function listQuery(extra) {
+      const q = new URLSearchParams({ limit: '100', ...(extra || {}) });
+      for (const [k, v] of Object.entries(filters)) {
+        if (v) q.set(k, v);
+      }
+      return q.toString();
+    }
 
     function pct(n, total) {
       if (!total) return '0%';
@@ -210,7 +312,7 @@
       const list = document.getElementById('list');
       const banner = document.getElementById('banner');
       try {
-        const res = await fetch('/api/traces?limit=100');
+        const res = await fetch('/api/traces?' + listQuery());
         if (res.status === 503) {
           banner.className = 'banner';
           banner.textContent = '⚠️ DATABASE_URL 미설정 — 트레이스를 불러올 수 없습니다.';
@@ -300,6 +402,8 @@
       return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     }
 
+    readFiltersFromUrl();
+    syncFilterUI();
     loadList();
     loadKpi();
     setInterval(loadList, 30000);  // refresh every 30s

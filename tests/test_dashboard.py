@@ -134,6 +134,89 @@ def test_api_stats_decisions_rejects_invalid_range():
     reader.stats_decisions.assert_not_awaited()
 
 
+def test_api_traces_passes_filters_through():
+    """decision / workflow / range filters reach list_recent intact."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    reader.list_recent.return_value = []
+
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+    res = client.get(
+        "/api/traces?decision=auto-merge&workflow=pr_review&range=24h"
+    )
+    assert res.status_code == 200
+    reader.list_recent.assert_awaited_once_with(
+        limit=50,
+        offset=0,
+        decision="auto-merge",
+        workflow="pr_review",
+        range_token="24h",
+    )
+
+
+def test_api_traces_rejects_unknown_filter_values():
+    """Unknown filters → 400 before touching the reader."""
+    from fastapi.testclient import TestClient
+
+    reader = AsyncMock()
+    app = _make_app(trace_reader=reader)
+    client = TestClient(app)
+
+    for url in (
+        "/api/traces?decision=BOGUS",
+        "/api/traces?workflow=not-a-workflow",
+        "/api/traces?range=99y",
+    ):
+        res = client.get(url)
+        assert res.status_code == 400, url
+    reader.list_recent.assert_not_awaited()
+
+
+def test_build_list_sql_no_filters():
+    """No filters → no WHERE clause; just LIMIT/OFFSET parameters."""
+    from ingress.dashboard.traces import _build_list_sql
+
+    sql, params = _build_list_sql(decision=None, workflow=None, range_token=None)
+    assert "WHERE" not in sql
+    assert params == []
+
+
+def test_build_list_sql_decision_none_uses_is_null():
+    """The 'none' decision sentinel must translate to IS NULL — not bind
+    the literal string 'none' as a JSON value (which would match nothing)."""
+    from ingress.dashboard.traces import _build_list_sql
+
+    sql, params = _build_list_sql(
+        decision="none", workflow=None, range_token=None
+    )
+    assert "IS NULL" in sql
+    assert "none" not in params
+
+
+def test_build_list_sql_combined_filters():
+    """Each filter contributes one bound parameter, in declaration order."""
+    from ingress.dashboard.traces import _build_list_sql
+
+    sql, params = _build_list_sql(
+        decision="auto-merge", workflow="pr_review", range_token="24h"
+    )
+    assert sql.count("%s") == 5  # 3 filters + LIMIT + OFFSET
+    assert params == ["auto-merge", "pr_review", "24 hours"]
+
+
+def test_build_list_sql_range_all_skips_window():
+    """range='all' is a sentinel for 'no time filter' — no interval bound."""
+    from ingress.dashboard.traces import _build_list_sql
+
+    sql, params = _build_list_sql(
+        decision=None, workflow=None, range_token="all"
+    )
+    assert "interval" not in sql
+    assert params == []
+
+
 def test_api_stats_decisions_default_range_is_24h():
     """No range param → defaults to 24h (sensible recent-activity window)."""
     from fastapi.testclient import TestClient

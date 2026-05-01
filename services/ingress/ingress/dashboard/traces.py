@@ -17,8 +17,19 @@ from ingress.logging import get_logger
 log = get_logger("ingress.dashboard.traces")
 
 
-_LIST_SQL = """
-SELECT
+# Range token → SQL interval. Whitelisted to avoid string interpolation
+# of user input into the query. `all` means no time filter.
+_RANGE_TO_INTERVAL: dict[str, str | None] = {
+    "1h": "1 hour",
+    "6h": "6 hours",
+    "24h": "24 hours",
+    "7d": "7 days",
+    "30d": "30 days",
+    "all": None,
+}
+
+
+_LIST_COLUMNS = """
     task_id,
     event_id,
     workflow,
@@ -28,10 +39,57 @@ SELECT
     cto_output ->> 'confidence' AS confidence,
     completed_at,
     created_at
-FROM pr_trace
-ORDER BY created_at DESC
-LIMIT %s OFFSET %s
 """
+
+# Whitelists: anything not in here gets rejected at the route boundary,
+# never reaches SQL. Decision values match the `cto_output.decision`
+# strings emitted by the CTO persona; "none" is the sentinel for
+# rows where the CTO never wrote a decision.
+_DECISIONS = {"auto-merge", "request-changes", "escalate-to-human", "none"}
+_WORKFLOWS = {
+    "pr_review",
+    "pr_review_monolithic",
+    "code_analyze",
+    "code_modify",
+    "linear_issue",
+}
+
+
+def _build_list_sql(
+    *,
+    decision: str | None,
+    workflow: str | None,
+    range_token: str | None,
+) -> tuple[str, list[Any]]:
+    """Compose the trace-list query + bind values from validated filters.
+
+    Returns the SQL text and a parameter list. All filter values are
+    validated against whitelists before this function — but we still
+    bind them as %s parameters rather than f-string interpolation."""
+    where_clauses: list[str] = []
+    params: list[Any] = []
+
+    if decision == "none":
+        where_clauses.append("cto_output ->> 'decision' IS NULL")
+    elif decision is not None:
+        where_clauses.append("cto_output ->> 'decision' = %s")
+        params.append(decision)
+
+    if workflow is not None:
+        where_clauses.append("workflow = %s")
+        params.append(workflow)
+
+    if range_token is not None and range_token != "all":
+        interval = _RANGE_TO_INTERVAL[range_token]
+        where_clauses.append("created_at >= NOW() - %s::interval")
+        params.append(interval)
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    sql = (
+        f"SELECT {_LIST_COLUMNS} FROM pr_trace {where_sql} "
+        "ORDER BY created_at DESC LIMIT %s OFFSET %s"
+    )
+    return sql, params
 
 _DETAIL_SQL = """
 SELECT
@@ -43,18 +101,6 @@ SELECT
 FROM pr_trace
 WHERE task_id = %s
 """
-
-
-# Range token → SQL interval. Whitelisted to avoid string interpolation
-# of user input into the query. `all` means no time filter.
-_RANGE_TO_INTERVAL: dict[str, str | None] = {
-    "1h": "1 hour",
-    "6h": "6 hours",
-    "24h": "24 hours",
-    "7d": "7 days",
-    "30d": "30 days",
-    "all": None,
-}
 
 
 def _decision_stats_sql(*, with_window: bool) -> str:
@@ -96,10 +142,29 @@ class TraceReader:
             await self._conn.close()
             self._conn = None
 
-    async def list_recent(self, *, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    async def list_recent(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        decision: str | None = None,
+        workflow: str | None = None,
+        range_token: str | None = None,
+    ) -> list[dict[str, Any]]:
         assert self._conn is not None, "TraceReader not connected"
+        if decision is not None and decision not in _DECISIONS:
+            raise ValueError(f"unknown decision: {decision!r}")
+        if workflow is not None and workflow not in _WORKFLOWS:
+            raise ValueError(f"unknown workflow: {workflow!r}")
+        if range_token is not None and range_token not in _RANGE_TO_INTERVAL:
+            raise ValueError(f"unknown range token: {range_token!r}")
+
+        sql, params = _build_list_sql(
+            decision=decision, workflow=workflow, range_token=range_token
+        )
+        params.extend([limit, offset])
         async with self._conn.cursor() as cur:
-            await cur.execute(_LIST_SQL, (limit, offset))
+            await cur.execute(sql, params)
             rows = await cur.fetchall()
         return rows
 

@@ -22,7 +22,12 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
-from ingress.dashboard.traces import _RANGE_TO_INTERVAL, TraceReader
+from ingress.dashboard.traces import (
+    _DECISIONS,
+    _RANGE_TO_INTERVAL,
+    _WORKFLOWS,
+    TraceReader,
+)
 from ingress.logging import get_logger
 
 log = get_logger("ingress.dashboard.routes")
@@ -41,12 +46,33 @@ def register_dashboard(app: FastAPI, trace_reader: TraceReader | None) -> None:
     async def list_traces(
         limit: int = Query(50, ge=1, le=200),
         offset: int = Query(0, ge=0),
+        decision: str | None = Query(None),
+        workflow: str | None = Query(None),
+        range: str | None = Query(None),
     ) -> JSONResponse:
+        if decision is not None and decision not in _DECISIONS:
+            raise HTTPException(
+                status_code=400, detail=f"invalid decision: {decision!r}"
+            )
+        if workflow is not None and workflow not in _WORKFLOWS:
+            raise HTTPException(
+                status_code=400, detail=f"invalid workflow: {workflow!r}"
+            )
+        if range is not None and range not in _RANGE_TO_INTERVAL:
+            raise HTTPException(
+                status_code=400, detail=f"invalid range: {range!r}"
+            )
         if trace_reader is None:
             return JSONResponse(
                 {"error": "DATABASE_URL not configured"}, status_code=503
             )
-        rows = await trace_reader.list_recent(limit=limit, offset=offset)
+        rows = await trace_reader.list_recent(
+            limit=limit,
+            offset=offset,
+            decision=decision,
+            workflow=workflow,
+            range_token=range,
+        )
         return JSONResponse({"items": [_serialize(r) for r in rows]})
 
     @router.get("/api/traces/{task_id}")
