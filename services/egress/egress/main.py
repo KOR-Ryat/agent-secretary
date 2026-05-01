@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
-from agent_secretary_config import MAX_DELIVERIES
+from agent_secretary_config import GitHubAppAuth, MAX_DELIVERIES
 from agent_secretary_schemas import ResultEvent
 from redis.asyncio import Redis
 
@@ -25,8 +25,12 @@ log = get_logger("egress.main")
 
 
 def _build_deliverers(settings: Settings) -> dict[str, ChannelDeliverer]:
+    try:
+        github_auth: GitHubAppAuth | None = GitHubAppAuth.from_env()
+    except RuntimeError:
+        github_auth = None
     return {
-        "github": GithubDeliverer(settings.github_token),
+        "github": GithubDeliverer(github_auth),
         "slack": SlackDeliverer(settings.slack_bot_token),
         "cli": CliDeliverer(),
     }

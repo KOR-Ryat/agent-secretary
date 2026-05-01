@@ -51,10 +51,7 @@ def fixture_origin(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> WorkspaceManager:
-    settings = WorkspaceSettings(
-        workspace_dir=tmp_path / "ws",
-        github_token=None,
-    )
+    settings = WorkspaceSettings(workspace_dir=tmp_path / "ws")
     return WorkspaceManager(settings)
 
 
@@ -79,10 +76,8 @@ def test_from_env_requires_explicit_workspace_dir(monkeypatch):
 
 def test_from_env_uses_explicit_value(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     s = WorkspaceSettings.from_env()
     assert s.workspace_dir == tmp_path / "ws"
-    assert s.github_token is None
 
 
 @pytest.mark.asyncio
@@ -93,11 +88,14 @@ async def test_mount_and_cleanup_around_real_branches(
     monkeypatch,
 ):
     # Override clone URL to point at the local fixture; no network needed.
-    monkeypatch.setattr(
-        WorkspaceManager,
-        "_clone_url",
-        lambda self, repo: str(fixture_origin),
-    )
+    async def fake_clone_url(self, repo):
+        return str(fixture_origin)
+
+    async def fake_fetch(self, repo):
+        pass
+
+    monkeypatch.setattr(WorkspaceManager, "_clone_url", fake_clone_url)
+    monkeypatch.setattr(WorkspaceManager, "fetch", fake_fetch)
 
     bare = await workspace.ensure_bare_repo(fake_repo)
     assert bare.exists() and bare.is_dir()
@@ -131,11 +129,14 @@ async def test_mount_cleanup_runs_even_on_exception(
     fixture_origin: Path,
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        WorkspaceManager,
-        "_clone_url",
-        lambda self, repo: str(fixture_origin),
-    )
+    async def fake_clone_url(self, repo):
+        return str(fixture_origin)
+
+    async def fake_fetch(self, repo):
+        pass
+
+    monkeypatch.setattr(WorkspaceManager, "_clone_url", fake_clone_url)
+    monkeypatch.setattr(WorkspaceManager, "fetch", fake_fetch)
 
     captured_path: Path | None = None
     with pytest.raises(RuntimeError, match="boom"):

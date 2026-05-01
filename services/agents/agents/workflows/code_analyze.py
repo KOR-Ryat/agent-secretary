@@ -23,7 +23,7 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
-from agent_secretary_config import Repo
+from agent_secretary_config import GitHubAppAuth, Repo
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -49,7 +49,11 @@ class CodeAnalyzeRunner:
         self._system_prompt = (prompts_dir / "workflows" / "code_analyze.md").read_text(
             encoding="utf-8"
         )
-        self._workspace = WorkspaceManager(WorkspaceSettings.from_env())
+        try:
+            github_auth: GitHubAppAuth | None = GitHubAppAuth.from_env()
+        except RuntimeError:
+            github_auth = None
+        self._workspace = WorkspaceManager(WorkspaceSettings.from_env(), github_auth)
 
     async def run(self, workflow_input: dict[str, Any]) -> dict[str, Any]:
         sr = workflow_input.get("service_resolution") or {}

@@ -1,4 +1,5 @@
 from agent_secretary_config.channel_names import CHANNEL_NAMES
+from agent_secretary_config.github_auth import GitHubAppAuth
 from agent_secretary_config.pricing import (
     CACHE_READ_DISCOUNT,
     CACHE_WRITE_PREMIUM,
@@ -45,6 +46,7 @@ from agent_secretary_config.workflows import (
 )
 
 __all__ = [
+    "GitHubAppAuth",
     "ALL_WORKFLOWS",
     "CACHE_READ_DISCOUNT",
     "CACHE_WRITE_PREMIUM",
