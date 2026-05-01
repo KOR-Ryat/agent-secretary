@@ -20,7 +20,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agent"]
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_secretary"]
       interval: 5s
       timeout: 2s
       retries: 5

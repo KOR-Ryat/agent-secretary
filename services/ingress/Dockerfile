@@ -8,6 +8,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /usr/local/bin/
 # Workspace files needed for resolution
 COPY pyproject.toml uv.lock* ./
 COPY packages/schemas packages/schemas
+COPY packages/config packages/config
 COPY services/ingress services/ingress
 COPY services/core/pyproject.toml services/core/pyproject.toml
 COPY services/agents/pyproject.toml services/agents/pyproject.toml
