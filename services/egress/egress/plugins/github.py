@@ -70,13 +70,16 @@ class GithubDeliverer(ChannelDeliverer):
             comment_id=response.json().get("id"),
         )
 
-        await self._remove_review_label(token, repo, pr_number)
+        decision = (result.output.get("cto_output") or {}).get("decision")
+        await self._update_labels(token, repo, pr_number, decision)
 
-    async def _remove_review_label(self, token: str, repo: str, number: int) -> None:
-        label = "agent:request-received"
+    async def _update_labels(
+        self, token: str, repo: str, number: int, decision: str | None
+    ) -> None:
+        # Remove the trigger label (404 is fine — already gone).
         resp = await self._client.request(
             "DELETE",
-            f"/repos/{repo}/issues/{number}/labels/{label}",
+            f"/repos/{repo}/issues/{number}/labels/agent:request-review",
             headers={"Authorization": f"Bearer {token}"},
         )
         if resp.status_code not in (200, 404):
@@ -84,10 +87,37 @@ class GithubDeliverer(ChannelDeliverer):
                 "github.deliver.label_remove_failed",
                 repo=repo,
                 number=number,
+                label="agent:request-review",
                 status=resp.status_code,
             )
         else:
-            log.info("github.deliver.label_removed", repo=repo, number=number)
+            log.info("github.deliver.label_removed", repo=repo, number=number,
+                     label="agent:request-review")
+
+        # Add result label if decision is known.
+        _DECISION_LABEL = {
+            "auto-merge": "agent:auto-merge",
+            "request-changes": "agent:request-changes",
+            "escalate-to-human": "agent:escalate-to-human",
+        }
+        result_label = _DECISION_LABEL.get(decision or "")
+        if result_label:
+            resp = await self._client.post(
+                f"/repos/{repo}/issues/{number}/labels",
+                json={"labels": [result_label]},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if resp.status_code not in (200, 201):
+                log.warning(
+                    "github.deliver.label_add_failed",
+                    repo=repo,
+                    number=number,
+                    label=result_label,
+                    status=resp.status_code,
+                )
+            else:
+                log.info("github.deliver.label_added", repo=repo, number=number,
+                         label=result_label)
 
     async def close(self) -> None:
         await self._client.aclose()
