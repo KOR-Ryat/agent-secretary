@@ -28,4 +28,7 @@ COPY prompts prompts
 
 RUN uv sync --package agent-secretary-agents --frozen --no-dev
 
+RUN useradd -m -u 1000 agent && chown -R agent:agent /app
+USER agent
+
 CMD ["uv", "run", "--package", "agent-secretary-agents", "python", "-m", "agents.main"]

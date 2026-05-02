@@ -64,10 +64,12 @@ class TraceStore:
         self._conn: psycopg.AsyncConnection | None = None
 
     async def connect(self) -> None:
+        # DDL runs in autocommit so a crash before commit can't leave an
+        # idle-in-transaction lock that blocks the next startup.
+        async with await psycopg.AsyncConnection.connect(self._dsn, autocommit=True) as ddl_conn:
+            async with ddl_conn.cursor() as cur:
+                await cur.execute(DDL)
         self._conn = await psycopg.AsyncConnection.connect(self._dsn, row_factory=dict_row)
-        async with self._conn.cursor() as cur:
-            await cur.execute(DDL)
-        await self._conn.commit()
         log.info("trace.connected")
 
     async def close(self) -> None:
