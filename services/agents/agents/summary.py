@@ -14,46 +14,32 @@ def render_summary_markdown(workflow_output: dict[str, Any]) -> str:
     decision = cto.get("decision", "?")
     confidence = cto.get("confidence", 0.0)
     reasoning = cto.get("reasoning", "")
-    triggers = cto.get("trigger_signals", []) or []
-    risk = cto.get("risk_metadata", {}) or {}
 
     lines = [
-        "## 🤖 agent-secretary review",
+        "## 🤖 agent-secretary",
         "",
-        f"**Decision:** `{decision}`  ·  **Confidence:** {confidence:.2f}",
+        f"`{decision}`  ·  confidence {confidence:.2f}",
         "",
     ]
-    if triggers:
-        lines.append("**Trigger signals:**")
-        lines.extend(f"- {t}" for t in triggers)
-        lines.append("")
 
-    high_risk = risk.get("high_risk_paths_touched") or []
-    if high_risk:
-        lines.append(f"**High-risk paths:** {', '.join(high_risk)}")
+    # P0/P1 findings only
+    critical_findings: list[str] = []
+    for lead in (workflow_output.get("lead_outputs") or []):
+        for f in (lead.get("findings") or []):
+            sev = f.get("severity", "")
+            if sev in ("P0", "P1"):
+                loc = f.get("location", "")
+                desc = f.get("description", "")
+                loc_str = f" `{loc}`" if loc else ""
+                critical_findings.append(f"- [{sev}]{loc_str} — {desc}")
+
+    if critical_findings:
+        lines.append("**P0/P1 findings:**")
+        lines.extend(critical_findings)
         lines.append("")
 
     if reasoning:
-        lines.append(f"_{reasoning}_")
-        lines.append("")
-
-    leads = workflow_output.get("lead_outputs") or []
-    if leads:
-        lines.append("**Lead findings:**")
-        for lead in leads:
-            findings = lead.get("findings") or []
-            if not findings:
-                lines.append(
-                    f"- **{lead.get('persona', '?')}** — no findings "
-                    f"(relevance {lead.get('domain_relevance', 0):.2f})"
-                )
-                continue
-            for f in findings:
-                lines.append(
-                    f"- **{lead.get('persona', '?')}** "
-                    f"_{f.get('severity', '?')}_ "
-                    f"`{f.get('location', '')}` — {f.get('description', '')}"
-                )
+        lines.append(f"**요약:** {reasoning}")
         lines.append("")
 
     return "\n".join(lines)
