@@ -58,14 +58,14 @@
 
 다음에 해당하면 **자동 머지 후보가 아님**:
 
-1. 어느 도메인이든 **`blocking` 심각도 finding** 이 하나라도 있음 → `request-changes` 또는 `escalate-to-human`
-2. 변경 경로에 **high-risk 영역** (auth/payments/billing/migrations/secrets 등 — 코드베이스별로 정의) 포함 → `escalate-to-human`
+1. 어느 도메인이든 **P0 또는 P1 finding** 이 하나라도 있음 → `request-changes` 또는 `escalate-to-human`
+2. 변경 경로에 **high-risk 영역** (auth/payments/billing/migrations/secrets 등) 포함 → `escalate-to-human`
 3. 변경 라인 100+ 인데 테스트 추가 0 → 최소 `request-changes`
 
 위에 해당하지 않으면 종합 판단:
-- 모든 도메인이 우려 없음 (warning 도 없음) + 자신감 높음 → `auto-merge`
-- warning 만 있고 영향 작음 → `auto-merge` (단 confidence 낮춤)
-- warning 누적이 크거나 모호 → `escalate-to-human` (의심스러우면 사람에게)
+- 모든 도메인이 P2 이하 finding 만 있거나 없음 + 자신감 높음 → `auto-merge`
+- P2 finding 만 있고 영향 작음 → `auto-merge` (단 confidence 낮춤)
+- P2 누적이 크거나 모호 → `escalate-to-human` (의심스러우면 사람에게)
 
 **핵심 원칙**: 모호한 케이스는 *봉합하지 말고* `escalate-to-human`. 잘못된 자동 머지 비용 >> 잘못된 에스컬레이션.
 
@@ -92,10 +92,11 @@
   "findings": [
     {
       "domain": "security | quality | ops | compatibility | product_ux",
-      "severity": "info | warning | blocking",
+      "severity": "P0 | P1 | P2 | P3 | P4",
       "location": "path/file.ext:line",
       "description": "...",
-      "threat_or_impact": "사용자 영향, 보안 위협, 장애 시나리오 등 구체적으로"
+      "threat_or_impact": "사용자 영향, 보안 위협, 장애 시나리오 등 구체적으로",
+      "suggestion": "구체적 수정 방향 (P0/P1 필수, P2 이하 권장)"
     }
   ]
 }
