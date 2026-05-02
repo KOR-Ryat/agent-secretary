@@ -23,10 +23,9 @@ from agent_secretary_schemas.personas import (
     MonolithicReviewOutput,
     RiskMetadata,
 )
-from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
-from agents import usage as usage_mod
+from agents import llm
 from agents.config import Settings
 from agents.logging import get_logger
 from agents.workflows.pr_review import _compute_risk_metadata
@@ -34,7 +33,6 @@ from agents.workflows.pr_review import _compute_risk_metadata
 log = get_logger("agents.workflows.monolithic_review")
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
-_DEFAULT_MAX_TOKENS = 8192
 
 
 class MonolithicReviewError(RuntimeError):
@@ -42,8 +40,7 @@ class MonolithicReviewError(RuntimeError):
 
 
 class MonolithicReviewRunner:
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
-        self._client = client
+    def __init__(self, settings: Settings) -> None:
         # Match A's *decision maker* (the CTO is Opus). Otherwise the A/B
         # comparison would conflate persona structure with model capability —
         # we want to isolate the "does persona separation help?" question.
@@ -68,37 +65,19 @@ class MonolithicReviewRunner:
         )
 
         user_message = self._build_user_message(pr)
-        response = await self._client.messages.create(
+        text = await llm.call_text(
+            system_prompt=self._system_prompt,
+            user_message=user_message,
             model=self._model,
-            max_tokens=_DEFAULT_MAX_TOKENS,
-            system=self._system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+            persona_id="monolithic_review",
         )
-        text = _extract_text(response)
         parsed = _parse_output(text, risk)
-
-        acc = usage_mod.current()
-        if acc is not None:
-            acc.record(
-                persona_id="monolithic_review",
-                model=self._model,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                cache_read_tokens=getattr(
-                    response.usage, "cache_read_input_tokens", 0
-                ) or 0,
-                cache_creation_tokens=getattr(
-                    response.usage, "cache_creation_input_tokens", 0
-                ) or 0,
-            )
 
         log.info(
             "workflow.monolithic_review.complete",
             decision=parsed.decision,
             confidence=parsed.confidence,
             finding_count=len(parsed.findings),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
         )
 
         # The dict shape mirrors what trace.py expects: cto_output column
@@ -121,14 +100,6 @@ class MonolithicReviewRunner:
 
 
 # --- helpers ---------------------------------------------------------
-
-
-def _extract_text(response) -> str:
-    parts = []
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            parts.append(block.text)
-    return "".join(parts)
 
 
 def _parse_output(text: str, risk: RiskMetadata) -> MonolithicReviewOutput:

@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_secretary_schemas import PersonaOutput
-from anthropic import AsyncAnthropic
 
 from agents.personas._base import PersonaAgent
 
@@ -65,7 +64,6 @@ class SpecialistAgent(PersonaAgent[PersonaOutput]):
     def __init__(
         self,
         spec: SpecialistSpec,
-        client: AsyncAnthropic,
         prompts_dir: Path,
         model: str,
     ) -> None:
@@ -73,7 +71,7 @@ class SpecialistAgent(PersonaAgent[PersonaOutput]):
         self.prompt_path = spec.prompt_path
         self.model = model
         self._spec = spec
-        super().__init__(client, prompts_dir)
+        super().__init__(prompts_dir)
 
     @property
     def lead_name(self) -> str:
@@ -86,11 +84,10 @@ class SpecialistAgent(PersonaAgent[PersonaOutput]):
 
 def build_specialist(
     name: str,
-    client: AsyncAnthropic,
     prompts_dir: Path,
     model: str,
 ) -> SpecialistAgent | None:
     spec = SPECIALIST_BY_NAME.get(name)
     if spec is None:
         return None
-    return SpecialistAgent(spec, client, prompts_dir, model)
+    return SpecialistAgent(spec, prompts_dir, model)

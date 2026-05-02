@@ -1,25 +1,26 @@
 """Tests for agents.config.Settings.from_env.
 
-The agents service refuses to start without ANTHROPIC_API_KEY — same
-fail-fast posture as AGENT_WORKSPACE_DIR. Other env vars have sensible
-defaults so they don't fail the load.
+ANTHROPIC_API_KEY is no longer required at config-load time — the
+Claude Agent SDK handles auth (env var or Claude Code subscription
+OAuth). The tests below confirm Settings.from_env succeeds without
+it, that defaults populate, that overrides take effect, and that
+empty optional vars are coerced to None.
 """
 
 from __future__ import annotations
 
-import pytest
 
-
-def test_from_env_requires_anthropic_api_key(monkeypatch):
+def test_from_env_succeeds_without_anthropic_api_key(monkeypatch):
+    """Used to require ANTHROPIC_API_KEY; now any auth path is delegated
+    to claude_agent_sdk so we no longer gate startup on it."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     from agents.config import Settings
 
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY is required"):
-        Settings.from_env()
+    s = Settings.from_env()  # would have raised under old behavior
+    assert s.redis_url.startswith("redis://")
 
 
 def test_from_env_defaults_when_minimum_provided(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     # Clear optional vars to confirm defaults kick in.
     for v in (
         "REDIS_URL",
@@ -37,7 +38,6 @@ def test_from_env_defaults_when_minimum_provided(monkeypatch):
     from agents.config import Settings
 
     s = Settings.from_env()
-    assert s.anthropic_api_key == "sk-ant-test"
     assert s.redis_url == "redis://localhost:6379"
     assert s.database_url is None
     assert s.log_level == "INFO"
@@ -51,7 +51,6 @@ def test_from_env_defaults_when_minimum_provided(monkeypatch):
 
 def test_from_env_overrides_take_effect(monkeypatch):
     """Each env var maps to the expected attribute (not silently dropped)."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
     monkeypatch.setenv("REDIS_URL", "redis://elsewhere:6380")
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db/x")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
@@ -70,7 +69,6 @@ def test_from_env_overrides_take_effect(monkeypatch):
 
 def test_from_env_treats_empty_optional_vars_as_unset(monkeypatch):
     """Empty string from .env is the same as missing for optional vars."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("REPORT_BASE_URL", "")
 

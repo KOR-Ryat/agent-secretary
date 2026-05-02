@@ -657,7 +657,11 @@ def test_api_stats_confidence_returns_bins():
         "range": "24h",
         "total": 5,
         "bins": [
-            {"lo": round(i * 0.1, 1), "hi": round((i + 1) * 0.1, 1), "count": (1 if i in (4, 5, 6, 7, 8) else 0)}
+            {
+                "lo": round(i * 0.1, 1),
+                "hi": round((i + 1) * 0.1, 1),
+                "count": (1 if i in (4, 5, 6, 7, 8) else 0),
+            }
             for i in range(10)
         ],
     }
