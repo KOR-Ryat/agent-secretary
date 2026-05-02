@@ -6,7 +6,6 @@ from dataclasses import dataclass
 class Settings:
     redis_url: str
     database_url: str | None
-    anthropic_api_key: str
     log_level: str
     consumer_group: str
     consumer_name: str
@@ -20,13 +19,14 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is required")
+        # No ANTHROPIC_API_KEY check: claude_agent_sdk authenticates against
+        # either ANTHROPIC_API_KEY (env) or a Claude Code subscription OAuth
+        # token. We let the SDK fail at first call rather than gating startup
+        # on the env var — that way a MAX-subscription deployment doesn't
+        # need a placeholder key.
         return cls(
             redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379"),
             database_url=os.environ.get("DATABASE_URL") or None,
-            anthropic_api_key=api_key,
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
             consumer_group=os.environ.get("AGENTS_CONSUMER_GROUP", "agents"),
             consumer_name=os.environ.get("AGENTS_CONSUMER_NAME", "agents-1"),

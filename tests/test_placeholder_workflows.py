@@ -32,22 +32,17 @@ async def test_linear_issue_placeholder_returns_message_and_detail():
 @pytest.mark.asyncio
 async def test_runner_dispatches_placeholders(monkeypatch, tmp_path):
     """WorkflowRunner routes the placeholder workflows without invoking an LLM."""
-    import os
-
-    os.environ.setdefault("ANTHROPIC_API_KEY", "dummy")
     monkeypatch.setenv("AGENT_WORKSPACE_DIR", str(tmp_path / "ws"))
 
     from pathlib import Path
 
     from agents.config import Settings
     from agents.runner import WorkflowRunner
-    from anthropic import AsyncAnthropic
 
     repo_root = Path(__file__).resolve().parents[1]
     s = Settings(
         redis_url="redis://x",
         database_url=None,
-        anthropic_api_key="dummy",
         log_level="WARNING",
         consumer_group="t",
         consumer_name="t1",
@@ -56,7 +51,7 @@ async def test_runner_dispatches_placeholders(monkeypatch, tmp_path):
         model_default="claude-sonnet-4-6",
         report_base_url=None,
     )
-    runner = WorkflowRunner(AsyncAnthropic(api_key="dummy"), s)
+    runner = WorkflowRunner(s)
 
     out_modify = await runner.run(WORKFLOW_CODE_MODIFY, {})
     assert out_modify["placeholder"] is True

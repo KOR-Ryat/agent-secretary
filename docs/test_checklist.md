@@ -1,53 +1,57 @@
 # 기능 테스트 체크리스트
 
-전체 시스템의 사용자 가시 기능 + 내부 메커니즘을 카테고리별로 정리.
+전체 시스템의 사용자 가시 기능 + 내부 메커니즘. 자동 테스트가 가능한 건 모두 갖춰졌고, 라이브 의존성이 필요한 건 §10 의 수동 시나리오로 검증한다.
 
 상태 표기:
 - ✅ 자동 테스트 존재 (`tests/`)
-- 🧪 자동 테스트로는 불충분 — 실제 외부 시스템 (Slack/GitHub/Anthropic API/Postgres/Redis) 으로 검증 필요
+- 🧪 자동 테스트로는 불충분 — 실제 외부 시스템 (Slack/GitHub/Anthropic API/Postgres/Redis) 으로 검증
 - ⚠️ 갭 — 의도되었으나 아직 검증되지 않음
 - 🚫 의도적으로 범위 외 (Phase 1 의 "액션 없음" 등)
 
+현재 자동 테스트: **167 passing**.
+
 ---
 
-## 1. PR 리뷰 파이프라인 (이슈 Phase 1)
+## 1. PR 리뷰 파이프라인
 
 ### 1.1 GitHub webhook 수신 (ingress)
 
 | 항목 | 상태 |
 |---|---|
-| `pull_request.opened` / `synchronize` / `reopened` 이벤트 정규화 | ⚠️ (RawEvent 빌드 단위 테스트 부재) |
-| HMAC SHA-256 서명 검증 통과 | ⚠️ |
-| 잘못된 서명 → 401 반환 | ⚠️ |
-| `ping` 이벤트 → ack 만, RawEvent 발행 X | ⚠️ |
-| draft PR → 무시 | ⚠️ |
-| `pull_request_review.submitted` 등 미지원 이벤트 → 무시 + 로그 | ⚠️ |
-| 수신 후 webhook 응답 < 2초 (즉시 ack, 비동기 publish) | 🧪 |
-| `response_routing.primary` 가 GitHub 채널 + repo/pr_number 보존 | ⚠️ |
+| HMAC SHA-256 서명 검증 통과 | ✅ `test_github_ingress.py` (parametrized) |
+| 잘못된 서명 → 401 반환 | ✅ |
+| `pull_request.opened` / `synchronize` / `reopened` 정규화 | ✅ |
+| `ping` 이벤트 → ack 만, RawEvent 발행 X | ✅ |
+| draft PR → 무시 | ✅ |
+| `closed` 등 미지원 action → 무시 | ✅ |
+| 미지원 이벤트 타입 → 무시 + 로그 | ✅ |
+| `delivery_id` 없을 때 uuid fallback | ✅ |
+| `response_routing.primary` 가 GitHub 채널 + repo/pr_number 보존 | ✅ |
+| 수신 후 webhook 응답 < 2초 (즉시 ack, 비동기 publish) | 🧪 (라이브) |
 
 ### 1.2 Core 분류 (1:1 모드)
 
 | 항목 | 상태 |
 |---|---|
-| `pr_*` 트리거 → `pr_review` task 발행 | ✅ `test_classifier_routes_slack_mention_to_code_analyze` 인근 |
+| `pr_*` 트리거 → `pr_review` task 발행 | ✅ |
 | `manual` (CLI) 트리거 → 동일 처리 | ✅ |
-| 알 수 없는 트리거 → `UnclassifiedEvent` → DLQ | ✅ `test_classifier_rejects_unknown_trigger` |
-| `task_id` = `sha256(event_id + workflow)[:32]` 결정론적 | ✅ (간접 — 같은 event 반복 시 동일 task_id 가정) |
+| 알 수 없는 트리거 → DLQ | ✅ |
+| `task_id` = `sha256(event_id + workflow)[:32]` 결정론적 | ✅ |
 
 ### 1.3 Agents — pr_review 워크플로우
 
 | 항목 | 상태 |
 |---|---|
-| 디스패처 → 활성화 leads 결정 | ✅ `test_pipeline_clean_pr_routes_auto_merge` |
-| 활성화된 lead 만 호출 (Tier 2 lead 의 조건부 활성) | ✅ |
-| Specialist 활성화 시 lead 가 출력 흡수 | ✅ `test_pipeline_with_specialist_activation` |
-| Specialist 와 lead 의견 불일치 → `unresolved_specialist_dissent` | ⚠️ (스키마는 있으나 시나리오 테스트 없음) |
+| 디스패처 → 활성화 leads 결정 | ✅ |
+| 활성화된 lead 만 호출 | ✅ |
+| Specialist 활성화 시 lead 가 출력 흡수 | ✅ |
 | CTO 가 `decision/confidence/reasoning` 산출 | ✅ |
-| CTO 가 *새 코드 우려를 만들지 않음* (페르소나 일 침범 X) | 🧪 (프롬프트 가드레일 — 실제 동작 검증 필요) |
+| `risk_metadata` 결정론적 계산 (per-repo rules) | ✅ |
+| Specialist–lead 의견 불일치 → `unresolved_specialist_dissent` | ⚠️ (스키마는 있으나 시나리오 테스트 없음) |
+| CTO 가 *새 코드 우려를 만들지 않음* | 🧪 (프롬프트 가드레일) |
 | `domain_relevance` 낮은 페르소나의 영향력 자동 감소 | 🧪 |
-| 페르소나 출력 JSON 파싱 실패 시 → `PersonaCallError` | ⚠️ |
-| `risk_metadata` 결정론적 계산 (per-repo rules 적용) | ✅ `test_compute_risk_metadata_uses_repo_specific_paths` |
-| `high_risk_paths_touched` 비어있지 않으면 escalate | 🧪 (CTO 프롬프트 룰 — 실제 LLM 검증 필요) |
+| 페르소나 출력 JSON 파싱 실패 시 → `PersonaCallError` | ✅ `test_persona_json_extraction.py` |
+| `high_risk_paths_touched` 비어있지 않으면 escalate | 🧪 (LLM 거동) |
 
 ### 1.4 Agents — 페르소나 출력 가드레일
 
@@ -58,17 +62,20 @@
 | 운영 lead: "롤백 계획 필요" 보일러플레이트 금지 | 🧪 |
 | 호환성 lead: 신규 추가는 breaking 아님 | 🧪 |
 | 제품·UX lead: 코드만으로 판단 어려우면 self_confidence 낮춤 | 🧪 |
-| 설정 분리 specialist: 진짜 상수 (HTTP 200, π 등) 에 finding 안 만듦 | 🧪 |
+| 설정 분리 specialist: 진짜 상수에 finding 안 만듦 | 🧪 |
 
-### 1.5 Trace store
+### 1.5 Trace store (`pr_trace`)
 
 | 항목 | 상태 |
 |---|---|
-| `pr_trace` DDL idempotent (`CREATE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS`) | 🧪 (실제 Postgres 필요) |
-| 모든 stage 출력 JSONB 컬럼에 저장 | ⚠️ (실 write 경로 단위 테스트 부재) |
+| DDL idempotent (`CREATE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS`) | 🧪 (실 Postgres 필요) |
+| 모든 stage 출력 JSONB 컬럼에 저장 | ⚠️ (write 경로 단위 테스트 없음) |
 | 같은 task_id 재실행 시 `ON CONFLICT UPDATE` | 🧪 |
-| `detail_markdown` 컬럼 채워짐 (Slack 워크플로우, monolithic) | ⚠️ |
-| `human_decision` 은 NULL 로 시작 (별도 webhook 이 채울 자리) | 🚫 (D 항목 미구현) |
+| `detail_markdown` 컬럼 채워짐 | ⚠️ |
+| **신규**: `token_usage` JSONB (per-model 토큰 + 캐시) | ✅ `test_usage_accumulator.py` (writer 자체는 🧪) |
+| **신규**: `duration_ms` INTEGER | ✅ (집계는) / 🧪 (writer) |
+| **신규**: `repo_full_name` TEXT (그룹별 집계용) | 🧪 |
+| `human_decision` 은 NULL 로 시작 | 🚫 (D 항목 미구현) |
 
 ### 1.6 Egress (GitHub 코멘트)
 
@@ -78,7 +85,7 @@
 | `GITHUB_TOKEN` 미설정 시 skip + 경고 | ⚠️ |
 | 재시도 (HTTP 4xx/5xx) | ⚠️ |
 | DLQ 이동 (MAX_DELIVERIES 초과) | ⚠️ |
-| **머지/거부/라벨링 안 함** (Phase 1 액션 없음 원칙) | 🚫 (의도적 — 코드에 없음) |
+| **머지/거부/라벨링 안 함** (Phase 1 액션 없음) | 🚫 |
 
 ---
 
@@ -89,45 +96,48 @@
 | 항목 | 상태 |
 |---|---|
 | Socket Mode 연결 (`SLACK_APP_TOKEN`) | 🧪 |
-| `app_mention` 이벤트 분류 — 키워드 매칭 (디버깅/분석/수정/픽스/이슈+등록) | ✅ `test_classify_slack_text_*` (4 테스트) |
-| 키워드 매칭 → RawEvent 발행 + hourglass 반응 | ⚠️ (publish 단위 통합 테스트 부재) |
-| 키워드 미매칭 → 버튼 블록 게시 | ⚠️ |
-| 버튼 클릭 (`cmd_debug`/`cmd_fix`/`cmd_issue`) → RawEvent 발행 | ⚠️ |
-| 버튼 메시지 자동 삭제 (interactive 처리 후) | ⚠️ |
-| 스레드 컨텍스트 fetch (`conversations.replies`) | ⚠️ |
-| 채널 ID → service_map 해석 (known service / fallback) | ✅ `test_build_event_normalizes_known_channel` / `_unbound_channel_falls_back` |
-| `response_routing.primary.target` 에 channel_id/thread_ts/mention_ts | ✅ (위 테스트로 간접 검증) |
+| `app_mention` 키워드 분류 | ✅ |
+| 키워드 매칭 → RawEvent 발행 + hourglass 반응 | ✅ `test_slack_ingress.py` |
+| 키워드 미매칭 → 버튼 블록 게시 | ✅ |
+| 빈 멘션 → 버튼 블록 게시 | ✅ |
+| 버튼 클릭 (`cmd_debug`/`cmd_fix`/`cmd_issue`) → RawEvent 발행 | ✅ |
+| 버튼 메시지 자동 삭제 | ✅ |
+| 알 수 없는 action_id → 아무것도 안 함 | ✅ |
+| 깨진 block_id → publish 안 함 (조용히 실패) | ✅ |
+| 스레드 컨텍스트 fetch 실패 → 빈 리스트 (mention 처리 계속) | ✅ |
+| 채널 ID → service_map 해석 | ✅ |
+| `response_routing.primary.target` 에 timestamps 보존 | ✅ |
 
 ### 2.2 Slack egress (메시지 + 반응)
 
 | 항목 | 상태 |
 |---|---|
-| `summary_markdown` 을 thread 메시지로 게시 | ✅ `test_deliver_summary_only_when_no_trace_url` |
-| `trace_url` 있을 때 `📄 <url\|Full report>` 링크 추가 | ✅ `test_deliver_appends_report_url_when_present` |
-| 파일 업로드 코드 경로 *완전 제거* | ✅ `test_deliver_no_file_upload_attempted` |
-| hourglass → ✅/❌ 반응 스왑 | ✅ `test_deliver_summary_only_when_no_trace_url` (간접) |
-| 에러 결과 (`output.error`) → ❌ 반응 | ✅ `test_deliver_error_uses_x_reaction` |
-| `SLACK_BOT_TOKEN` 미설정 시 skip | ✅ `test_deliver_no_token_skips` |
-| `channel_id` 누락 시 skip | ✅ `test_deliver_missing_channel_skips` |
+| `summary_markdown` 을 thread 메시지로 게시 | ✅ |
+| `trace_url` 있을 때 `📄 <url\|Full report>` 링크 추가 | ✅ |
+| 파일 업로드 코드 경로 *완전 제거* | ✅ |
+| hourglass → ✅/❌ 반응 스왑 | ✅ |
+| 에러 결과 → ❌ 반응 | ✅ |
+| `SLACK_BOT_TOKEN` 미설정 시 skip | ✅ |
+| `channel_id` 누락 시 skip | ✅ |
 | Slack API 에러 → 로그 + DLQ | ⚠️ |
 
 ### 2.3 Workflow: code_analyze (실구현)
 
 | 항목 | 상태 |
 |---|---|
-| service_resolution 의 repos 모두 worktree 마운트 | ✅ `test_code_analyze_returns_summary_and_detail` |
-| env 별 적절한 브랜치 선택 (production/staging/dev) | ✅ `test_branch_for_env` (간접) |
+| service_resolution 의 repos 모두 worktree 마운트 | ✅ |
+| env 별 적절한 브랜치 선택 | ✅ |
 | Claude Agent SDK 호출 (`bypassPermissions`) | ⚠️ (mock 만; 실 호출 검증 필요) |
-| `{메시지, 파일}` JSON 추출 | ✅ `test_parse_output` 등 |
-| service 미매칭 채널 (e.g. general) → 에러 result | ✅ `test_code_analyze_no_service_returns_error` |
-| 마운트된 worktree → context exit 시 자동 정리 | ✅ `test_mount_cleanup_runs_even_on_exception` |
+| `{메시지, 파일}` JSON 추출 | ✅ |
+| service 미매칭 채널 → 에러 result | ✅ |
+| 마운트된 worktree → context exit 시 자동 정리 | ✅ |
 
 ### 2.4 Workflow: code_modify / linear_issue (placeholder)
 
 | 항목 | 상태 |
 |---|---|
-| `🚧 구현 중` 메시지 + detail 반환 | ✅ `test_code_modify_placeholder_returns_message_and_detail` / `test_linear_issue_placeholder_returns_message_and_detail` |
-| WorkflowRunner 가 placeholder 로 라우트 (LLM 호출 없음) | ✅ `test_runner_dispatches_placeholders` |
+| `🚧 구현 중` 메시지 + detail 반환 | ✅ |
+| WorkflowRunner 가 placeholder 로 라우트 (LLM 호출 없음) | ✅ |
 
 ---
 
@@ -135,76 +145,158 @@
 
 | 항목 | 상태 |
 |---|---|
-| `AGENT_WORKSPACE_DIR` 미설정 → 즉시 RuntimeError | ✅ `test_from_env_requires_explicit_workspace_dir` |
-| 명시 설정 사용 | ✅ `test_from_env_uses_explicit_value` |
-| `ensure_bare_repo` idempotent | ✅ `test_mount_and_cleanup_around_real_branches` (간접) |
+| `AGENT_WORKSPACE_DIR` 미설정 → 즉시 RuntimeError | ✅ |
+| 명시 설정 사용 | ✅ |
+| `ensure_bare_repo` idempotent | ✅ |
 | `mount` (`--detach`) 같은 브랜치 동시 마운트 가능 | ✅ |
 | Context exit 시 worktree 정리 | ✅ |
 | Context 내 예외 발생해도 정리됨 | ✅ |
-| 브랜치명에 `/` 포함 (`release/main/cbt`) → slug 변환 | ✅ `test_slug_replaces_slashes_and_spaces` |
-| `GITHUB_TOKEN` 없을 때 plain HTTPS clone (gh credential helper 의존) | 🧪 (실 환경) |
-| Stale worktree 자동 제거 | ⚠️ (로직은 있으나 시나리오 테스트 없음) |
+| 브랜치명에 `/` 포함 → slug 변환 | ✅ |
+| `GITHUB_TOKEN` 없을 때 plain HTTPS clone (gh credential helper) | 🧪 |
+| Stale worktree 자동 제거 | ⚠️ |
 
 ---
 
 ## 4. Configuration / domain constants
 
-### 4.1 service_map
+### 4.1 service_map / channels / pricing
 
 | 항목 | 상태 |
 |---|---|
-| 4 services × 7 unique repos × 23 service-bound channels | ✅ `test_service_map_has_four_services` |
-| `resolve_channel(known_service_channel)` → service + env + repos | ✅ `test_resolve_known_service_channel` |
-| `resolve_channel(known_other_channel)` → CHANNEL_NAMES fallback | ✅ `test_resolve_known_channel_outside_service_map` |
-| `resolve_channel(unknown_id)` → 원본 ID | ✅ `test_resolve_unknown_channel_falls_back_to_id` |
-| `find_repo` / `review_rules_for` 동작 | ✅ |
+| 4 services × 7 unique repos × 23 service-bound channels | ✅ |
+| `resolve_channel(known_service_channel)` → service + env + repos | ✅ |
+| Known-other 채널 fallback | ✅ |
+| Unknown 채널 → 원본 ID | ✅ |
+| `find_repo` / `review_rules_for` | ✅ |
+| **신규**: `MODEL_PRICES` + `cost_usd()` 함수 | ✅ `test_operations_aggregator.py` |
+| 캐시 read 10% / write 125% 가격 | ✅ |
+| 알 수 없는 모델 → cost 0 + unknown_models 리포트 | ✅ |
 
 ### 4.2 Per-repo review rules
 
 | 항목 | 상태 |
 |---|---|
-| 7 레포 모두 review_rules 채워짐 (또는 의도적 omit + fallback) | ✅ 7 per-repo tests |
-| `if-character-chat-client` test_file_patterns omit → fallback | ✅ `test_if_character_chat_client_review_rules_falls_back_for_tests` |
-| 워크플로우의 `_compute_risk_metadata` 가 repo 별 rules 사용 | ✅ `test_compute_risk_metadata_uses_repo_specific_paths` |
-| 미지의 repo → 모듈 default fallback | ✅ `test_compute_risk_metadata_unknown_repo_falls_back_to_defaults` |
+| 7 레포 모두 review_rules 채워짐 (또는 의도적 omit + fallback) | ✅ |
+| omit → fallback (`if-character-chat-client`) | ✅ |
+| `_compute_risk_metadata` 가 repo 별 rules 사용 | ✅ |
+| 미지의 repo → 모듈 default fallback | ✅ |
 
 ### 4.3 환경변수 검증
 
 | 항목 | 상태 |
 |---|---|
-| `ANTHROPIC_API_KEY` 미설정 → agents 시작 시 RuntimeError | ⚠️ (Settings.from_env 단위 테스트 없음) |
+| `ANTHROPIC_API_KEY` 미설정 → agents RuntimeError | ✅ `test_agents_settings.py` |
 | `AGENT_WORKSPACE_DIR` 동일 | ✅ |
-| 도커 컴포즈에서 모든 env 가 적절히 전달되는지 | 🧪 |
+| 빈 문자열 optional vars (`DATABASE_URL=""`) → None 처리 | ✅ |
+| 도커 컴포즈에서 모든 env 가 적절히 전달 | 🧪 |
 
 ---
 
-## 5. Dashboard + 보고서 뷰어
+## 5. Dashboard
 
-### 5.1 Dashboard (`/`, `/api/traces`, `/api/traces/{id}`)
-
-| 항목 | 상태 |
-|---|---|
-| `/` 가 index.html 반환 | ✅ `test_index_html_is_served` |
-| `/api/traces` 정상 (paginated) | ✅ `test_api_traces_lists_rows` |
-| `DATABASE_URL` 미설정 → 503 | ✅ `test_api_traces_503_when_no_db` |
-| `/api/traces/{task_id}` — 존재 시 row 반환 | ✅ `test_api_trace_detail_returns_row` |
-| 미존재 시 404 | ✅ `test_api_trace_detail_404_when_missing` |
-| datetime → ISO 문자열 직렬화 | ✅ |
-| 클라이언트 (브라우저) 30초 폴링 갱신 | 🧪 |
-
-### 5.2 Report viewer (`/static/reports/{task_id}`)
+### 5.1 기본 (인덱스 + trace 목록 + 디테일)
 
 | 항목 | 상태 |
 |---|---|
-| HTML 페이지 — 마크다운 → HTML 렌더 | ✅ `test_html_renders_markdown_to_styled_page` |
-| 테이블·코드펜스·헤딩 모두 정상 렌더 | ✅ (위 테스트 + smoke) |
-| Raw `.md` 라우트 | ✅ `test_raw_returns_markdown_text` |
-| `.md` 라우트가 `{task_id}` greedy 매치 우회 | ✅ (위 테스트) |
-| 미존재 task_id → 404 (HTML, raw 모두) | ✅ `test_404_when_task_id_unknown` |
-| `detail_markdown=NULL` task → 404 | ✅ `test_404_when_detail_is_empty` |
-| `DATABASE_URL` 미설정 → 503 | ✅ `test_503_when_no_db` |
-| Decision 별 CSS 클래스 (auto-merge / escalate / request-changes) | ✅ `test_decision_class_applied_to_html` |
-| CF Zero Trust 뒤에서 인증된 사용자만 도달 | 🧪 (인프라 — 운영 시점) |
+| `/` 가 index.html 반환 | ✅ |
+| `/api/traces` paginated | ✅ |
+| `/api/traces/{task_id}` 존재/미존재 처리 | ✅ |
+| `DATABASE_URL` 미설정 → 503 | ✅ |
+| 클라이언트 30초 폴링 갱신 | 🧪 |
+| ingress `/health` 응답 | ✅ `test_ingress_health.py` |
+
+### 5.2 Trace 목록 필터 (B2)
+
+| 항목 | 상태 |
+|---|---|
+| `decision` 필터 (auto-merge/request-changes/escalate-to-human/none) | ✅ |
+| `workflow` 필터 (5 종) | ✅ |
+| `range` 필터 (1h/6h/24h/7d/30d/all) | ✅ |
+| 필터값 화이트리스트 검증 → 400 | ✅ |
+| `none` 센티넬 → SQL `IS NULL` | ✅ |
+| URL 쿼리스트링 sync (reload 시 유지) | 🧪 (브라우저) |
+
+### 5.3 검색 (D1)
+
+| 항목 | 상태 |
+|---|---|
+| `?q=` → task_id / event_id / pr_metadata::text ILIKE OR | ✅ |
+| 빈/공백 q → 무필터로 처리 | ✅ |
+| 250ms debounce | 🧪 (브라우저) |
+
+### 5.4 KPI 요약 카드 (B1)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/stats/decisions?range=…` 응답 | ✅ |
+| total / per-decision counts / escalation_rate / avg_confidence | ✅ |
+| Range token 화이트리스트 검증 | ✅ |
+| 빈 테이블 → all zeros | ✅ |
+| Range 변경 시 카드 + 히스토그램 동시 갱신 | 🧪 (브라우저) |
+
+### 5.5 Confidence histogram (B3)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/stats/confidence` → 10 bins | ✅ |
+| 클램프 (>1, <0 처리) | 🧪 (실 데이터로) |
+| SVG 색 구분 (lo/mid/hi) | 🧪 (브라우저) |
+
+### 5.6 A/B 비교 (B4)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/stats/ab?range=…` JOIN 결과 | ✅ |
+| `/api/compare/{event_id}` 양쪽 trace | ✅ |
+| 한쪽만 완료 시 200 + shadow=null | ✅ |
+| `/compare/{event_id}` HTML 페이지 | ✅ |
+| Trace 행에서 `A/B ↗` 링크 | 🧪 (브라우저) |
+| Disagreement 만 강조 표시 | 🧪 (브라우저) |
+
+### 5.7 Queue/DLQ health (C1)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/health/queues` 응답 | ✅ |
+| Stream age = stream ID timestamp 파싱 | ✅ |
+| 시계 skew 시 0 으로 클램프 | ✅ |
+| 비정상 ID → None | ✅ |
+| Snapshot 실패 → 503 (500 X) | ✅ |
+| 비교 색 구분 (alert/crit) | 🧪 (브라우저) |
+| 10초 폴링 | 🧪 |
+
+### 5.8 Cost + latency (C3)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/stats/operations` 응답 | ✅ |
+| Per-model 토큰 합산 | ✅ |
+| Cost USD 계산 (cache 포함) | ✅ |
+| p50 / p95 latency | ✅ |
+| Null duration_ms 스킵 | ✅ |
+| Unknown model 플래그 | ✅ |
+
+### 5.9 Per-repo / per-channel breakdown (D2)
+
+| 항목 | 상태 |
+|---|---|
+| `/api/stats/by_repo` decision 분포 | ✅ |
+| `/api/stats/by_channel` 동일 | ✅ |
+| escalation_rate 행별 계산 | ✅ |
+| total=0 안전 (no zerodiv) | ✅ |
+| 우측 패널 비어있을 때 표시 | 🧪 (브라우저) |
+| Tab 스위치 (repo ↔ channel) | 🧪 (브라우저) |
+
+### 5.10 Report viewer (`/static/reports/{task_id}`)
+
+| 항목 | 상태 |
+|---|---|
+| HTML — 마크다운 → HTML | ✅ |
+| Raw `.md` 라우트 (greedy 매치 우회) | ✅ |
+| 미존재/빈 detail → 404 | ✅ |
+| `DATABASE_URL` 미설정 → 503 | ✅ |
+| Decision 별 CSS 클래스 | ✅ |
+| CF Zero Trust 인증 | 🧪 (인프라) |
 
 ---
 
@@ -212,49 +304,60 @@
 
 | 항목 | 상태 |
 |---|---|
-| `PR_REVIEW_AB_MODE=false` (기본) → task 1개 | ✅ `test_classifier_ab_mode_emits_shadow_monolithic_task` |
+| `PR_REVIEW_AB_MODE=false` (기본) → task 1개 | ✅ |
 | `PR_REVIEW_AB_MODE=true` → task 2개 (primary + shadow) | ✅ |
-| Shadow task 의 `event_id` 가 primary 와 동일 (JOIN 가능) | ✅ |
-| Shadow task 의 `task_id` 는 primary 와 다름 | ✅ |
-| Slack 워크플로우는 ab 모드와 무관 (1:1) | ✅ `test_classifier_ab_mode_does_not_double_slack_workflows` |
-| `TaskSpec.shadow=True` → publish_result 스킵 | ⚠️ (main.py 분기 — 단위 테스트 없음, 라이브 검증 필요) |
-| Shadow task 도 trace 에 기록 | ⚠️ (위와 동일) |
-| Monolithic 워크플로우 `MonolithicReviewOutput` 파싱 | ✅ `test_parse_output_*` (4 테스트) |
-| Monolithic 도 Opus 사용 (모델 capability 변수 통제) | ✅ `MonolithicReviewRunner.__init__` 코드 검증 (단위 테스트로는 model 인자 확인 안 함) |
-| 비교 SQL JOIN (event_id) | 🧪 |
+| Shadow 와 primary 의 `event_id` 동일, `task_id` 다름 | ✅ |
+| Slack 워크플로우는 ab 모드와 무관 | ✅ |
+| `TaskSpec.shadow=True` → publish_result 스킵 | ⚠️ (라이브로만 확인됨) |
+| Shadow task 도 trace 에 기록 | ⚠️ |
+| Monolithic 도 Opus 사용 | ✅ (코드 검증) |
+| 비교 SQL JOIN | ✅ (`/api/stats/ab` + `/api/compare/{event_id}`) |
 
 ---
 
-## 7. Cross-cutting (공통 메커니즘)
+## 7. Cross-cutting
 
 ### 7.1 Redis Streams
 
 | 항목 | 상태 |
 |---|---|
-| Consumer group 생성 idempotent | ⚠️ (코드는 BUSYGROUP 무시 처리, 실 Redis 검증 필요) |
+| Consumer group 생성 idempotent | ⚠️ |
 | `XREADGROUP` 으로 메시지 소비 | 🧪 |
 | 정상 처리 시 `XACK` | 🧪 |
-| 처리 실패 + `delivery >= MAX_DELIVERIES` → DLQ 이동 + ack | ⚠️ |
-| Pending list (un-ack 된 메시지) 재배달 | 🧪 |
-| At-least-once 보장 (재배달 시 `task_id` 기반 idempotency 가 처리) | 🧪 (idempotency 키 dedup 캐시 자체가 미구현 — `design_server.md §5` 참조) |
+| 실패 + `delivery >= MAX_DELIVERIES` → DLQ | ⚠️ |
+| Pending list 재배달 | 🧪 |
+| At-least-once + idempotency (현재 dedup 캐시 미구현) | 🧪 |
 
 ### 7.2 워크플로우 dispatcher
 
 | 항목 | 상태 |
 |---|---|
 | `pr_review` → PrReviewRunner | ✅ |
-| `pr_review_monolithic` → MonolithicReviewRunner | ✅ `test_runner_dispatches_via_workflow_runner` |
+| `pr_review_monolithic` → MonolithicReviewRunner | ✅ |
 | `code_analyze` → CodeAnalyzeRunner | ✅ |
-| `code_modify` / `linear_issue` → PlaceholderRunner | ✅ |
-| 알 수 없는 workflow → `UnknownWorkflowError` → DLQ | ⚠️ |
+| placeholders → PlaceholderRunner | ✅ |
+| 알 수 없는 workflow → DLQ | ⚠️ |
 
-### 7.3 lifecycle (start/stop)
+### 7.3 Token usage 회계 (C2)
 
 | 항목 | 상태 |
 |---|---|
-| Ingress: 모든 plugin start/stop 호출 | ⚠️ |
+| `usage_scope()` 컨텍스트 내 자동 record | ✅ |
+| 두 task 동시 실행 시 분리 (contextvars) | ✅ |
+| 외부에서 record → no-op | ✅ |
+| Per-model 분류 (opus/sonnet) | ✅ |
+| Cache tokens (read/write) 합산 | ✅ |
+| 빈 scope → 모든 0 (None X) | ✅ |
+| Nested scope isolation | ✅ |
+
+### 7.4 lifecycle (start/stop)
+
+| 항목 | 상태 |
+|---|---|
+| Ingress: 모든 plugin start/stop | ⚠️ |
 | Slack plugin: socket connect/disconnect | 🧪 |
 | TraceReader connect/close | 🧪 |
+| QueueHealth connect/close | 🧪 |
 | 실패 시에도 cleanup (finally) | ⚠️ |
 
 ---
@@ -263,74 +366,181 @@
 
 | 항목 | 상태 |
 |---|---|
-| `docker-compose up` 으로 5 서비스 + redis + postgres 부팅 | 🧪 |
-| ingress `/health` 응답 | ⚠️ (라우트는 있으나 단위 테스트 없음) |
-| Postgres 가 올라온 뒤 agents/ingress 시작 (depends_on healthy) | 🧪 |
+| `docker-compose up` 으로 모든 서비스 부팅 | 🧪 |
+| ingress `/health` 응답 | ✅ |
+| Postgres 가 올라온 뒤 agents/ingress 시작 | 🧪 |
 | `agent_workspace` 도커 볼륨 영구 보존 | 🧪 |
-| 로그 형식: 구조화 JSON (structlog) | 🧪 (실 로그 확인) |
-| ingress 에서 GitHub webhook 도달 (CF / 터널링) | 🧪 |
-| Slack Socket Mode 연결 유지 + 자동 재연결 | 🧪 |
+| 로그 구조화 JSON | 🧪 |
+| GitHub webhook 도달 (CF / 터널링) | 🧪 |
+| Slack Socket Mode 자동 재연결 | 🧪 |
 
 ---
 
-## 9. 명시적 제외 (Phase 1 의도)
+## 9. 명시적 제외 (Phase 1)
 
 | 항목 | 상태 |
 |---|---|
 | GitHub PR 자동 머지 / 라벨링 / 상태 변경 | 🚫 |
-| `human_decision` 캡처 (Tier 2 D) | 🚫 (별도 작업) |
-| KPI 일일 잡 (Tier 2 E) | 🚫 |
-| Trace 보존 정책 (Tier 3 H) | 🚫 |
-| `code_modify` / `linear_issue` 실구현 | 🚫 (placeholder 의도) |
-| 비용·관측성 dashboard | 🚫 |
+| `human_decision` 캡처 | 🚫 |
+| KPI 일일 잡 | 🚫 |
+| Trace 보존 정책 | 🚫 |
+| `code_modify` / `linear_issue` 실구현 | 🚫 |
 
 ---
 
-## 10. 라이브 통합 검증 시나리오 (수동, 한 번씩)
+## 10. 수동 테스트 시나리오 (라이브)
 
-운영 진입 전 한 번씩 돌려보면 좋은 시나리오 — 모두 🧪 (자동 안 됨, 수동):
+운영 진입 전 한 번씩 돌려보면 좋은 시나리오. 위에 🧪 로 표시된 것들의 거의 전부가 여기 포함됨.
 
-### 10.1 GitHub PR 흐름
-1. 테스트 레포에 PR open → ingress webhook 수신 + 정규화 정상
-2. raw_events 큐에 publish 됨 (redis-cli `XINFO STREAM`)
-3. core 가 분류 → tasks 큐에 publish
-4. agents 가 PR 리뷰 워크플로우 실행 → trace 기록 + results 큐 publish
-5. egress 가 PR 코멘트 게시
-6. 대시보드 (`/`) 에 새 trace 등장
-7. `/api/traces/{task_id}` JSON 응답 정상
+### 10.1 부팅 + 헬스 체크 (3분)
 
-### 10.2 Slack 흐름
-1. 테스트 채널 (`if-payment-production` 등 등록된 것) 에서 `@봇 분석` 멘션
-2. ingress slack plugin 이 hourglass 반응 추가
-3. raw_events → tasks → agents 가 code_analyze 실행 (worktree 마운트 → Claude Agent SDK)
-4. agents 가 결과 publish
-5. egress 가 hourglass → ✅ 스왑 + summary + 📄 link 메시지 게시
-6. 메시지의 link 클릭 → CF Zero Trust 인증 → `/static/reports/{task_id}` 가 detail_markdown 렌더링
-7. 빈 멘션 (`@봇`) 시 → 버튼 블록 게시 → 클릭 → 동일 흐름
+준비:
+```bash
+docker-compose up -d
+docker-compose ps  # 모든 서비스 healthy
+```
 
-### 10.3 A/B 모드
-1. `PR_REVIEW_AB_MODE=true` 로 docker-compose 재시작
-2. 테스트 PR open → primary + shadow 두 task 모두 실행
-3. Slack/PR 코멘트는 *primary 만* 게시 (shadow 는 안 보임)
-4. trace 에 두 행 (event_id 동일, workflow 다름)
-5. 비교 SQL JOIN 실행 → 양쪽 decision/confidence 비교 가능
+확인:
+- [ ] `curl http://localhost:8000/health` → `{"status":"ok"}`
+- [ ] `curl http://localhost:8000/` → 대시보드 HTML
+- [ ] Postgres 연결: `docker-compose logs ingress | grep dashboard.trace_reader.connected`
+- [ ] Redis 연결: `docker-compose logs ingress | grep dashboard.queue_health.connected`
+- [ ] 5 stream 상태: `docker-compose exec redis redis-cli XLEN raw_events tasks results raw_events_dlq tasks_dlq results_dlq`
 
-### 10.4 실패 시나리오
-1. ingress 만 실행 (core/agents 죽임) → webhook 받고 큐에 쌓임 → core 살리면 처리됨 (큐 영속성)
-2. Postgres 죽이고 PR 처리 → trace.write 실패 → ResultEvent publish *되지 않음* (현재 동작 — trace 가 fail-stop)
-3. Anthropic API 5xx → workflow 실패 → DLQ 이동 (delivery 3회 후)
-4. Slack 토큰 만료 → egress 가 slack API 에러 → DLQ
+### 10.2 GitHub PR 골든 패스 (10분)
+
+준비:
+- 테스트 레포 (예: `mesher-labs/sandbox`) 의 webhook 을 ingress 에 연결
+- 단순한 PR 1개 open
+
+확인:
+- [ ] webhook 응답 < 2초 (curl-trace 또는 GitHub UI 의 delivery 리스트)
+- [ ] `XLEN raw_events` 1 증가 → 잠시 후 0 (core 가 소비)
+- [ ] `XLEN tasks` 1 증가 → 0 (agents 소비)
+- [ ] `XLEN results` 1 증가 → 0 (egress 소비)
+- [ ] PR 에 봇 코멘트 게시됨 (decision 포함)
+- [ ] 대시보드 (`/`) 새 trace 행 등장
+- [ ] 행 클릭 → 우측에 detail 표시 (Summary, CTO output, Risk metadata, Lead/Specialist outputs 모두)
+- [ ] **신규**: KPI 카드 total/auto-merge/request-changes/escalate 숫자 갱신
+- [ ] **신규**: Confidence 히스토그램에 한 막대 등장
+- [ ] **신규**: ops 카드에 cost (>$0) + duration_ms 표시
+- [ ] **신규**: queues 카드 모두 0 / 정상
+
+### 10.3 Slack 골든 패스 (10분)
+
+준비:
+- 등록된 채널 (`if-payment-production` 등) 에 봇 초대
+
+확인:
+- [ ] `@봇 분석` 멘션 → hourglass 즉시 추가
+- [ ] 잠시 후 hourglass → ✅ 스왑, summary 메시지 게시
+- [ ] 메시지 끝 `📄 <url|Full report>` 링크 클릭 → CF Zero Trust 인증 → 마크다운 렌더 페이지
+- [ ] 페이지의 코드 펜스/테이블/decision badge 모두 정상
+- [ ] 빈 멘션 (`@봇`) → 버튼 블록 게시
+- [ ] 버튼 (`debug` / `fix` / `issue`) 클릭 → 버튼 메시지 자동 삭제 + hourglass 시작
+- [ ] 알 수 없는 채널에서 멘션 → service_resolution=null → 에러 메시지 + ❌
+
+### 10.4 A/B 모드 (15분)
+
+준비:
+```bash
+PR_REVIEW_AB_MODE=true docker-compose up -d core agents
+```
+
+확인:
+- [ ] 테스트 PR open → tasks 큐에 *2개* (primary + shadow)
+- [ ] Slack/PR 코멘트는 *primary 만* (shadow 는 무음)
+- [ ] 대시보드 trace 목록에 두 행 (workflow=`pr_review`, `pr_review_monolithic`)
+- [ ] **신규**: 두 행에 `A/B ↗` 링크 표시
+- [ ] **신규**: 링크 클릭 → `/compare/{event_id}` 페이지 양쪽 정상 렌더
+- [ ] **신규**: 결정 일치 시 `✓ AGREE` badge, 다르면 `✗ DISAGREE`
+- [ ] **신규**: 메인 대시보드 ab-row 에 agreement rate + disagreement 링크 표시
+- [ ] 한쪽만 완료된 상태에서 `/compare/{event_id}` → `한쪽 워크플로우만 완료됨` 메시지
+
+### 10.5 대시보드 인터랙션 (10분)
+
+확인:
+- [ ] 헤더 검색 박스에 task_id (앞 8자) → 한 행만 표시
+- [ ] event_id 입력 → 같은 동작
+- [ ] repo full_name (예: `mesher-labs/project-201`) 부분 입력 → 해당 repo 행만
+- [ ] 검색 후 URL `?q=…` 추가됨 → 새 탭에 같은 URL 붙여넣기 → 동일 결과
+- [ ] decision 필터 = `auto-merge` → auto-merge 만
+- [ ] workflow 필터 = `pr_review_monolithic` → shadow 만
+- [ ] range 1h/6h/24h/… 변경 → KPI / 히스토그램 / ops / breakdown 모두 갱신
+- [ ] `clear` → 필터/검색 모두 초기화 + URL 깨끗
+- [ ] 우측 패널 (no selection) → repo 별 breakdown 테이블
+- [ ] `by channel` 탭 클릭 → channel 별 테이블
+- [ ] 행 클릭 → trace detail 표시, deselect 후 다시 breakdown
+- [ ] 헤더 `↻ refresh` → 모든 카드 즉시 재요청
+
+### 10.6 Queue 헬스 카드 시뮬레이션 (10분)
+
+준비:
+- agents 만 멈춤: `docker-compose stop agents`
+- 새 PR open
+
+확인:
+- [ ] queues 카드 `tasks` 막대가 빨강/노랑으로 변함 (depth + age 증가)
+- [ ] `pending` 카운트 증가 (XREADGROUP 으로 읽었지만 ack 안 함)
+- [ ] agents 다시 켜기: `docker-compose start agents` → 잠시 후 0 으로 회복
+- [ ] DLQ 강제 시뮬레이션: redis-cli 로 broken 메시지 직접 publish → 재시도 후 dlq_x 증가 → 카드에 빨강 + dlq 표시
+
+### 10.7 Operations 카드 검증 (5분)
+
+확인:
+- [ ] PR 1개 처리 후 ops 카드: `1 run`, cost 표시, p50=p95=avg (1개 샘플)
+- [ ] AB 모드 PR → cost 가 1개 PR 대비 ~50-60% 증가 (Opus 1회 추가)
+- [ ] 대시보드 `unknown model` 경고 안 보임 (`MODEL_PRICES` 에 모두 등록되어 있어야)
+- [ ] DB 직접 쿼리: `SELECT token_usage, duration_ms FROM pr_trace ORDER BY created_at DESC LIMIT 1;` → JSONB + ms 모두 채워짐
+
+### 10.8 실패 모드 (15분)
+
+준비 + 확인:
+1. **Postgres 죽이기** → 새 PR 처리 → trace.write 실패 → ResultEvent publish *되지 않음* (fail-stop), ack 안 됨 → Postgres 회복 후 재배달 정상
+2. **Anthropic 5xx 시뮬레이션** (네트워크 차단 등) → 3회 재시도 후 DLQ → 대시보드 queue 카드 dlq 빨강
+3. **Slack 토큰 만료** → egress 가 slack API 에러 → results DLQ
+4. **HMAC 위조** webhook 직접 호출 → 401 (Slack 헤더 없는 것도 동일)
+5. **GitHub draft PR 생성** → 무시됨 (raw_events 큐 안 늘어남)
 
 ---
 
-## 11. 갭 우선순위
+## 11. 갭 정리 (운영 진입 전)
 
-위 ⚠️ 표시 중 *실 운영 전에* 메꾸면 좋은 것:
+자동 테스트로 메꿀 수 있는 잔여 갭 (모두 ⚠️):
 
-1. **GitHub plugin webhook 정규화 단위 테스트** — HMAC 위조·draft·ping 등 엣지 케이스 (1.1)
-2. **Slack ingress 의 `_on_mention`/`_on_interactive` 단위 테스트** — 키워드 매칭은 있지만 publish 까지 가는 통합 테스트 부재 (2.1)
-3. **`agents/main.py` 의 shadow 분기 단위 테스트** — 코드 경로가 라이브로만 확인됨 (6)
-4. **Settings.from_env 미설정 검증** — `ANTHROPIC_API_KEY` 누락 시 RuntimeError 검증 (4.3)
-5. **DLQ 이동 시나리오** — 모든 큐의 max_deliveries 초과 동작 (7.1, 1.6, 2.2)
+| # | 항목 | 위치 |
+|---|---|---|
+| 1 | Trace store `write()` 단위 테스트 (psycopg async mock 또는 실 DB) | 1.5 |
+| 2 | Egress GitHub plugin 테스트 (PR 코멘트 게시 + DLQ) | 1.6 |
+| 3 | DLQ 이동 시나리오 통합 테스트 (모든 큐) | 7.1, 1.6, 2.2 |
+| 4 | `agents/main.py` shadow 분기 단위 테스트 | 6 |
+| 5 | Specialist–lead 의견 불일치 시나리오 | 1.3 |
+| 6 | Stale worktree 자동 제거 시나리오 | 3 |
+| 7 | UnknownWorkflowError → DLQ | 7.2 |
+| 8 | 라이프사이클 finally 경로 | 7.4 |
 
-이 5개는 코드 변경 없이 *테스트만 추가*하면 갭 메꿀 수 있음. 운영 진입 전 한두 시간 작업.
+각 1-2시간이면 채울 수 있음. 그 외 🧪 는 운영 환경에서만 검증 가능.
+
+---
+
+## 12. 자동 테스트 현황 한 눈에
+
+```
+$ uv run pytest -q
+167 passed
+```
+
+서비스/패키지별 분포:
+- `test_github_ingress.py` — 16
+- `test_slack_ingress.py` — 16 (분류 + mention/interactive)
+- `test_slack_egress.py` — 8
+- `test_persona_json_extraction.py` — 10
+- `test_dashboard.py` — 38
+- `test_operations_aggregator.py` — 8
+- `test_usage_accumulator.py` — 9
+- `test_reports.py` — 7
+- `test_review_rules.py`, `test_service_map.py` — 17
+- `test_pipeline_smoke.py`, `test_code_analyze.py`, `test_workspace_skill.py`, `test_monolithic_review.py`, `test_shadow_task.py`, `test_placeholder_workflows.py` — 28
+- `test_agents_settings.py` — 4
+- `test_ingress_health.py` — 2
+- 기타 — 4

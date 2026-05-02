@@ -3,24 +3,22 @@
 Exercises the data flow across all four services without Redis/Postgres:
     1. ingress: build RawEvent from a CLI-style payload
     2. core: classify → TaskSpec
-    3. agents: run pr_review workflow with the Anthropic client mocked
+    3. agents: run pr_review workflow with the SDK ``query()`` mocked
     4. egress: render summary, dispatch to a stub deliverer
 
-The Anthropic mock dispatches canned JSON responses based on the system
-prompt in the call (each persona has a unique prompt header), simulating
-the dispatcher → leads → CTO chain.
+The SDK fake routes canned JSON responses based on the system prompt
+header (each persona has a unique prompt header), simulating the
+dispatcher → leads → CTO chain.
 """
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
+from _llm_fake import fake_query_factory, install, persona_for_system
 from agent_secretary_schemas import (
     ChannelTarget,
     RawEvent,
@@ -65,53 +63,12 @@ def _build_pr_event(**overrides) -> RawEvent:
     )
 
 
-def _fenced(payload: dict) -> str:
-    return f"```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-
-def _persona_for_system(system_prompt: str) -> str:
-    """Identify which persona is being called from its system prompt header."""
-    head = system_prompt.lstrip().splitlines()[0] if system_prompt else ""
-    if "디스패처" in head or "dispatcher" in head.lower():
-        return "dispatcher"
-    if "CTO" in head:
-        return "cto"
-    if "보안 lead" in head:
-        return "security_lead"
-    if "품질 lead" in head:
-        return "quality_lead"
-    if "운영 lead" in head:
-        return "ops_lead"
-    if "호환성 lead" in head:
-        return "compatibility_lead"
-    if "제품·UX lead" in head:
-        return "product_ux_lead"
-    return "unknown"
-
-
-def _build_anthropic_mock(canned: dict[str, dict]) -> SimpleNamespace:
-    """Mock that returns canned JSON based on which persona is being called."""
-
-    async def create(*, model, max_tokens, system, messages):
-        persona = _persona_for_system(system)
-        if persona not in canned:
-            raise AssertionError(f"no canned response for persona={persona!r}")
-        text = _fenced(canned[persona])
-        return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text=text)],
-            usage=SimpleNamespace(input_tokens=100, output_tokens=200),
-        )
-
-    return SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(side_effect=create)))
-
-
 def _settings():
     from agents.config import Settings
 
     return Settings(
         redis_url="redis://x",
         database_url=None,
-        anthropic_api_key="dummy",
         log_level="WARNING",
         consumer_group="t",
         consumer_name="t1",
@@ -155,7 +112,7 @@ def _dispatcher_default() -> dict:
 
 
 @pytest.mark.asyncio
-async def test_pipeline_clean_pr_routes_auto_merge():
+async def test_pipeline_clean_pr_routes_auto_merge(monkeypatch):
     from agents.summary import render_summary_markdown
     from agents.workflows.pr_review import PrReviewRunner
     from core.classifier import classify
@@ -185,9 +142,9 @@ async def test_pipeline_clean_pr_routes_auto_merge():
         "ops_lead": _clean_lead("운영 lead", "ops"),
         "cto": cto_clean,
     }
-    client = _build_anthropic_mock(canned)
+    install(monkeypatch, fake_query_factory(canned))
 
-    runner = PrReviewRunner(client, _settings())
+    runner = PrReviewRunner(_settings())
     output = await runner.run(task.workflow_input)
 
     assert output["cto_output"]["decision"] == "auto-merge"
@@ -207,7 +164,7 @@ async def test_pipeline_clean_pr_routes_auto_merge():
 
 
 @pytest.mark.asyncio
-async def test_pipeline_blocking_finding_routes_escalate():
+async def test_pipeline_blocking_finding_routes_escalate(monkeypatch):
     from agents.workflows.pr_review import PrReviewRunner
     from core.classifier import classify
 
@@ -253,9 +210,9 @@ async def test_pipeline_blocking_finding_routes_escalate():
         "ops_lead": _clean_lead("운영 lead", "ops"),
         "cto": cto_escalate,
     }
-    client = _build_anthropic_mock(canned)
+    install(monkeypatch, fake_query_factory(canned))
 
-    runner = PrReviewRunner(client, _settings())
+    runner = PrReviewRunner(_settings())
     output = await runner.run(task.workflow_input)
 
     assert output["cto_output"]["decision"] == "escalate-to-human"
@@ -336,7 +293,7 @@ def test_trace_url_construction():
 
 
 @pytest.mark.asyncio
-async def test_pipeline_with_quality_config_separation_specialist():
+async def test_pipeline_with_quality_config_separation_specialist(monkeypatch):
     """Source-code PR activates 설정 분리 specialist; quality lead receives its output."""
     from agents.workflows.pr_review import PrReviewRunner
     from core.classifier import classify
@@ -395,44 +352,35 @@ async def test_pipeline_with_quality_config_separation_specialist():
         },
     }
 
-    called: list[str] = []
+    canned = {
+        "dispatcher": dispatcher_with_quality_specialist,
+        "security_lead": _clean_lead("보안 lead", "security"),
+        "quality_lead": _clean_lead("품질 lead", "quality"),
+        "ops_lead": _clean_lead("운영 lead", "ops"),
+        "config_separation": config_specialist_output,
+        "cto": cto_clean,
+    }
 
-    async def create(*, model, max_tokens, system, messages):
-        persona = _persona_for_system(system)
+    def classify_with_specialists(system: str) -> str:
+        persona = persona_for_system(system)
         if persona == "unknown":
             head = system.lstrip().splitlines()[0]
             if "설정 분리" in head:
-                persona = "config_separation"
-        called.append(persona)
-        canned = {
-            "dispatcher": dispatcher_with_quality_specialist,
-            "security_lead": _clean_lead("보안 lead", "security"),
-            "quality_lead": _clean_lead("품질 lead", "quality"),
-            "ops_lead": _clean_lead("운영 lead", "ops"),
-            "config_separation": config_specialist_output,
-            "cto": cto_clean,
-        }
-        if persona not in canned:
-            raise AssertionError(f"no canned response for persona={persona!r}")
-        text = _fenced(canned[persona])
-        return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text=text)],
-            usage=SimpleNamespace(input_tokens=100, output_tokens=200),
-        )
+                return "config_separation"
+        return persona
 
-    client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(side_effect=create))
-    )
-    runner = PrReviewRunner(client, _settings())
+    fake_query = fake_query_factory(canned, classify=classify_with_specialists)
+    install(monkeypatch, fake_query)
+    runner = PrReviewRunner(_settings())
     output = await runner.run(task.workflow_input)
 
-    assert "config_separation" in called
-    assert "quality_lead" in called
+    assert "config_separation" in fake_query.called
+    assert "quality_lead" in fake_query.called
     assert any(s["persona"] == "설정 분리" for s in output["specialist_outputs"])
 
 
 @pytest.mark.asyncio
-async def test_pipeline_with_specialist_activation():
+async def test_pipeline_with_specialist_activation(monkeypatch):
     """Migration PR activates DB·migrations specialist; ops lead receives its output."""
     from agents.workflows.pr_review import PrReviewRunner
     from core.classifier import classify
@@ -485,41 +433,29 @@ async def test_pipeline_with_specialist_activation():
         },
     }
 
-    # Track which personas got called
-    called_personas: list[str] = []
+    canned = {
+        "dispatcher": dispatcher_with_specialist,
+        "security_lead": _clean_lead("보안 lead", "security"),
+        "quality_lead": _clean_lead("품질 lead", "quality"),
+        "ops_lead": _clean_lead("운영 lead", "ops"),
+        "db_migrations": db_specialist_output,
+        "cto": cto_clean,
+    }
 
-    async def create(*, model, max_tokens, system, messages):
-        persona = _persona_for_system(system)
+    def classify_with_specialists(system: str) -> str:
+        persona = persona_for_system(system)
         if persona == "unknown":
-            # try specialist matching: look for "DB·마이그레이션 specialist" header
             head = system.lstrip().splitlines()[0]
             if "DB·마이그레이션" in head:
-                persona = "db_migrations"
-        called_personas.append(persona)
+                return "db_migrations"
+        return persona
 
-        canned = {
-            "dispatcher": dispatcher_with_specialist,
-            "security_lead": _clean_lead("보안 lead", "security"),
-            "quality_lead": _clean_lead("품질 lead", "quality"),
-            "ops_lead": _clean_lead("운영 lead", "ops"),
-            "db_migrations": db_specialist_output,
-            "cto": cto_clean,
-        }
-        if persona not in canned:
-            raise AssertionError(f"no canned response for persona={persona!r}")
-        text = _fenced(canned[persona])
-        return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text=text)],
-            usage=SimpleNamespace(input_tokens=100, output_tokens=200),
-        )
-
-    client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(side_effect=create))
-    )
-    runner = PrReviewRunner(client, _settings())
+    fake_query = fake_query_factory(canned, classify=classify_with_specialists)
+    install(monkeypatch, fake_query)
+    runner = PrReviewRunner(_settings())
     output = await runner.run(task.workflow_input)
 
-    assert "db_migrations" in called_personas
-    assert "ops_lead" in called_personas
+    assert "db_migrations" in fake_query.called
+    assert "ops_lead" in fake_query.called
     assert any(s["persona"] == "DB·마이그레이션" for s in output["specialist_outputs"])
     assert output["cto_output"]["decision"] == "auto-merge"

@@ -1,10 +1,15 @@
 """Persona agent base.
 
-Wraps an Anthropic API call: loads system prompt from file, sends a
+Wraps a single-turn LLM call: loads system prompt from file, sends a
 structured user message, parses the JSON response into a Pydantic model.
 
-Each concrete persona (lead/specialist/dispatcher/cto) subclasses this and
-specifies its prompt path, output type, and model.
+The actual LLM call goes through ``agents.llm.call_text`` which uses
+``claude_agent_sdk.query`` under the hood — that lets the agents
+service authenticate against either an ``ANTHROPIC_API_KEY`` or a
+Claude Code subscription without code changes.
+
+Each concrete persona (lead/specialist/dispatcher/cto) subclasses this
+and specifies its prompt path, output type, and model.
 """
 
 from __future__ import annotations
@@ -14,17 +19,14 @@ import re
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ValidationError
 
-from agents import usage as usage_mod
+from agents import llm
 from agents.logging import get_logger
 
 log = get_logger("agents.personas")
 
 T = TypeVar("T", bound=BaseModel)
-
-_DEFAULT_MAX_TOKENS = 4096
 
 
 class PersonaCallError(RuntimeError):
@@ -44,10 +46,7 @@ class PersonaAgent(Generic[T]):
     model: str
     """Anthropic model id."""
 
-    max_tokens: int = _DEFAULT_MAX_TOKENS
-
-    def __init__(self, client: AsyncAnthropic, prompts_dir: Path) -> None:
-        self._client = client
+    def __init__(self, prompts_dir: Path) -> None:
         self._system_prompt = (prompts_dir / self.prompt_path).read_text(encoding="utf-8")
 
     async def call(self, user_input: dict) -> T:
@@ -58,35 +57,13 @@ class PersonaAgent(Generic[T]):
         """
         user_message = self._build_user_message(user_input)
         log.info("persona.call.start", persona=self.persona_id, model=self.model)
-        response = await self._client.messages.create(
+        text = await llm.call_text(
+            system_prompt=self._system_prompt,
+            user_message=user_message,
             model=self.model,
-            max_tokens=self.max_tokens,
-            system=self._system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+            persona_id=self.persona_id,
         )
-        text = _extract_text(response)
-        log.info(
-            "persona.call.complete",
-            persona=self.persona_id,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-        )
-        acc = usage_mod.current()
-        if acc is not None:
-            acc.record(
-                persona_id=self.persona_id,
-                model=self.model,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                # Cache fields are present on responses from prompt-cached
-                # requests; absent otherwise. Treat missing as zero.
-                cache_read_tokens=getattr(
-                    response.usage, "cache_read_input_tokens", 0
-                ) or 0,
-                cache_creation_tokens=getattr(
-                    response.usage, "cache_creation_input_tokens", 0
-                ) or 0,
-            )
+        log.info("persona.call.complete", persona=self.persona_id)
         return self._parse(text)
 
     def _build_user_message(self, user_input: dict) -> str:
@@ -116,19 +93,11 @@ class PersonaAgent(Generic[T]):
             raise PersonaCallError(f"{self.persona_id} produced invalid JSON: {e}") from e
 
 
-def _extract_text(response) -> str:
-    parts = []
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            parts.append(block.text)
-    return "".join(parts)
-
-
 _FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 
 def _extract_json_block(text: str) -> str:
-    """Extract a JSON object from Anthropic response text.
+    """Extract a JSON object from the model's response text.
 
     Prefers fenced code blocks; falls back to the first {...} balanced span.
     """
