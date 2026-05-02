@@ -32,13 +32,19 @@ class CoreQueue:
     async def consume(self, block_ms: int = 5000) -> AsyncIterator[tuple[str, RawEvent, int]]:
         """Yield (message_id, RawEvent, delivery_count) tuples."""
         while True:
-            entries = await self._redis.xreadgroup(
-                groupname=self._group,
-                consumername=self._consumer,
-                streams={STREAM_RAW_EVENTS: ">"},
-                count=10,
-                block=block_ms,
-            )
+            try:
+                entries = await self._redis.xreadgroup(
+                    groupname=self._group,
+                    consumername=self._consumer,
+                    streams={STREAM_RAW_EVENTS: ">"},
+                    count=10,
+                    block=block_ms,
+                )
+            except ResponseError as e:
+                if "NOGROUP" in str(e):
+                    await self.ensure_group()
+                    continue
+                raise
             if not entries:
                 continue
             for _stream, messages in entries:

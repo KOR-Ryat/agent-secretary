@@ -31,13 +31,19 @@ class AgentsQueue:
 
     async def consume(self, block_ms: int = 5000) -> AsyncIterator[tuple[str, TaskSpec, int]]:
         while True:
-            entries = await self._redis.xreadgroup(
-                groupname=self._group,
-                consumername=self._consumer,
-                streams={STREAM_TASKS: ">"},
-                count=1,
-                block=block_ms,
-            )
+            try:
+                entries = await self._redis.xreadgroup(
+                    groupname=self._group,
+                    consumername=self._consumer,
+                    streams={STREAM_TASKS: ">"},
+                    count=1,
+                    block=block_ms,
+                )
+            except ResponseError as e:
+                if "NOGROUP" in str(e):
+                    await self.ensure_group()
+                    continue
+                raise
             if not entries:
                 continue
             for _stream, messages in entries:

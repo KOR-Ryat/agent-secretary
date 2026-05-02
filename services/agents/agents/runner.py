@@ -35,10 +35,17 @@ class WorkflowRunner:
         self._monolithic = MonolithicReviewRunner(settings)
         self._code_analyze = CodeAnalyzeRunner(settings)
         self._placeholder = PlaceholderRunner()
-        try:
-            self._auth: GitHubAppAuth | None = GitHubAppAuth.from_env()
-        except Exception:
-            self._auth = None
+        self._auth: GitHubAppAuth | None = None
+        self._auth_loaded = False
+
+    def _get_auth(self) -> GitHubAppAuth | None:
+        if not self._auth_loaded:
+            try:
+                self._auth = GitHubAppAuth.from_env()
+            except Exception:
+                self._auth = None
+            self._auth_loaded = True
+        return self._auth
 
     async def run(self, workflow: str, workflow_input: dict) -> dict:
         await self._ack_label(workflow_input)
@@ -56,7 +63,8 @@ class WorkflowRunner:
     async def _ack_label(self, workflow_input: dict) -> None:
         if workflow_input.get("trigger") not in _LABEL_TRIGGERS:
             return
-        if not self._auth:
+        auth = self._get_auth()
+        if not auth:
             log.warning("agents.runner.ack_label.no_auth")
             return
         repo = (workflow_input.get("repo") or {}).get("full_name")
@@ -65,6 +73,6 @@ class WorkflowRunner:
         if not repo or not number:
             return
         try:
-            await ack_request(self._auth, repo, number)
+            await ack_request(auth, repo, number)
         except Exception as e:
             log.warning("agents.runner.ack_label.failed", repo=repo, number=number, error=str(e))
