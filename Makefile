@@ -1,4 +1,4 @@
-COMPOSE = docker compose -f infra/docker-compose.yml
+COMPOSE = docker compose -f infra/docker-compose.yml --env-file .env
 
 .PHONY: creds up down build logs
 
