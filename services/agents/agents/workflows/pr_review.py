@@ -26,6 +26,7 @@ from agent_secretary_schemas.personas import RiskMetadata
 from agents.config import Settings
 from agents.logging import get_logger
 from agents.personas.cto import Cto
+from agents.summary import render_detail_markdown
 from agents.personas.dispatcher import Dispatcher
 from agents.personas.registry import build_lead
 from agents.personas.specialists.specialist_agent import (
@@ -108,13 +109,15 @@ class PrReviewRunner:
         for lst in specialist_outputs_by_lead.values():
             all_specialist_outputs.extend(o.model_dump() for o in lst)
 
-        return {
+        output = {
             "dispatcher_output": activation.model_dump(),
             "specialist_outputs": all_specialist_outputs,
             "lead_outputs": [o.model_dump() for o in lead_outputs],
             "cto_output": cto_output.model_dump(),
             "risk_metadata": risk_metadata.model_dump(),
         }
+        output["detail_markdown"] = render_detail_markdown(output)
+        return output
 
     async def _run_specialists(
         self,

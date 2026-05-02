@@ -55,10 +55,13 @@ class GithubDeliverer(ChannelDeliverer):
             return
 
         token = await self._auth.get_token()
+        body = result.summary_markdown
+        if result.trace_url:
+            body += f"\n\n[📋 전체 리포트 보기]({result.trace_url})"
         url = f"/repos/{repo}/issues/{pr_number}/comments"
         response = await self._client.post(
             url,
-            json={"body": result.summary_markdown},
+            json={"body": body},
             headers={"Authorization": f"Bearer {token}"},
         )
         response.raise_for_status()
