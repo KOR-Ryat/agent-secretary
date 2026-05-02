@@ -36,6 +36,8 @@ from agent_secretary_config.streams import (
 )
 from agent_secretary_config.workflows import (
     ALL_WORKFLOWS,
+    GITHUB_AUTO_PR_TRIGGERS,
+    GITHUB_TRIGGER_TO_WORKFLOW,
     SLACK_KEYWORD_TO_WORKFLOW,
     WORKFLOW_CODE_ANALYZE,
     WORKFLOW_CODE_MODIFY,
@@ -47,6 +49,8 @@ from agent_secretary_config.workflows import (
 
 __all__ = [
     "ALL_WORKFLOWS",
+    "GITHUB_AUTO_PR_TRIGGERS",
+    "GITHUB_TRIGGER_TO_WORKFLOW",
     "CACHE_READ_DISCOUNT",
     "CACHE_WRITE_PREMIUM",
     "CHANNEL_NAMES",

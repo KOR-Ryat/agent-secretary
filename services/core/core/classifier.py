@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 
 from agent_secretary_config import (
     ALL_WORKFLOWS,
+    GITHUB_AUTO_PR_TRIGGERS,
+    GITHUB_TRIGGER_TO_WORKFLOW,
     WORKFLOW_PR_REVIEW,
     WORKFLOW_PR_REVIEW_MONOLITHIC,
 )
@@ -28,8 +30,8 @@ class UnclassifiedEvent(Exception):
 def classify(event: RawEvent, *, ab_mode: bool = False) -> list[TaskSpec]:
     trigger = event.normalized.get("trigger", "")
 
-    # GitHub PR / CLI manual → PR review pipeline
-    if trigger.startswith("pr_") or trigger == "manual":
+    # GitHub PR auto triggers (configurable) or explicit label/comment request
+    if trigger in GITHUB_AUTO_PR_TRIGGERS or trigger in GITHUB_TRIGGER_TO_WORKFLOW or trigger == "manual":
         tasks = [_build_pr_review_task(event)]
         if ab_mode:
             tasks.append(_build_pr_review_monolithic_shadow(event))

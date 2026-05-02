@@ -40,6 +40,19 @@ SLACK_KEYWORD_TO_WORKFLOW: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
+# --- GitHub trigger → workflow mapping ---------------------------------
+#
+# Maps normalized trigger strings from ingress to workflow ids.
+# label_request / comment_request are explicit user-initiated triggers.
+GITHUB_TRIGGER_TO_WORKFLOW: dict[str, str] = {
+    "label_request": WORKFLOW_PR_REVIEW,
+    "comment_request": WORKFLOW_PR_REVIEW,
+}
+
+# Triggers that auto-fire on PR events (opened/synchronize/reopened)
+GITHUB_AUTO_PR_TRIGGERS: frozenset[str] = frozenset()  # disabled; use explicit triggers
+
+
 def classify_slack_text(text: str) -> str | None:
     """Return the workflow id matching a Slack @mention text, or None."""
     if not text:
