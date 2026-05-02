@@ -56,95 +56,78 @@ async def run() -> None:
 
     log.info("agents.consumer_ready", group=settings.consumer_group)
 
-    try:
-        async for message_id, task, delivery in queue.consume():
-            log.info(
-                "agents.task.received",
-                message_id=message_id,
-                task_id=task.task_id,
-                workflow=task.workflow,
-                delivery=delivery,
-            )
-            t_start = time.perf_counter()
-            try:
-                with usage_mod.usage_scope() as usage_acc:
-                    output = await runner.run(task.workflow, task.workflow_input)
-            except UnknownWorkflowError as e:
-                log.warning("agents.workflow.unknown", task_id=task.task_id, reason=str(e))
+    async def _process(message_id: str, task: object, delivery: int, *, reclaimed: bool) -> None:
+        event_name = "agents.task.reclaimed" if reclaimed else "agents.task.received"
+        log.info(event_name, message_id=message_id, task_id=task.task_id,
+                 workflow=task.workflow, delivery=delivery)
+        t_start = time.perf_counter()
+        try:
+            with usage_mod.usage_scope() as usage_acc:
+                output = await runner.run(task.workflow, task.workflow_input)
+        except UnknownWorkflowError as e:
+            log.warning("agents.workflow.unknown", task_id=task.task_id, reason=str(e))
+            await queue.to_dlq(message_id, task.model_dump_json(), str(e))
+            return
+        except Exception as e:
+            log.error("agents.workflow.error", task_id=task.task_id,
+                      error=str(e), delivery=delivery)
+            if delivery >= MAX_DELIVERIES:
                 await queue.to_dlq(message_id, task.model_dump_json(), str(e))
-                continue
-            except Exception as e:
-                log.error(
-                    "agents.workflow.error",
-                    task_id=task.task_id,
-                    error=str(e),
-                    delivery=delivery,
-                )
-                if delivery >= MAX_DELIVERIES:
-                    await queue.to_dlq(message_id, task.model_dump_json(), str(e))
-                # else leave un-acked → redis will redeliver
-                continue
+            # else leave un-acked → redis will redeliver
+            return
 
-            # Workflows may opt in to providing their own summary/detail
-            # (e.g., code_analyze → 메시지/파일). Otherwise the pr_review
-            # markdown renderer takes over.
-            summary = output.get("summary_markdown") or render_summary_markdown(output)
-            detail = output.get("detail_markdown")
+        summary = output.get("summary_markdown") or render_summary_markdown(output)
+        detail = output.get("detail_markdown")
 
-            # Public report URL — only when both REPORT_BASE_URL is configured
-            # and the workflow actually produced a detail body to render.
-            trace_url: str | None = None
-            if settings.report_base_url and detail:
-                trace_url = (
-                    f"{settings.report_base_url.rstrip('/')}/static/reports/{task.task_id}"
-                )
-
-            result = ResultEvent(
-                result_id=str(uuid.uuid4()),
-                task_id=task.task_id,
-                event_id=task.event_id,
-                workflow=task.workflow,
-                output=output,
-                summary_markdown=summary,
-                detail_markdown=detail,
-                response_routing=task.response_routing,
-                completed_at=datetime.now(UTC),
-                trace_url=trace_url,
+        trace_url: str | None = None
+        if settings.report_base_url and detail:
+            trace_url = (
+                f"{settings.report_base_url.rstrip('/')}/static/reports/{task.task_id}"
             )
 
-            duration_ms = int((time.perf_counter() - t_start) * 1000)
-            token_usage = usage_acc.totals()
+        result = ResultEvent(
+            result_id=str(uuid.uuid4()),
+            task_id=task.task_id,
+            event_id=task.event_id,
+            workflow=task.workflow,
+            output=output,
+            summary_markdown=summary,
+            detail_markdown=detail,
+            response_routing=task.response_routing,
+            completed_at=datetime.now(UTC),
+            trace_url=trace_url,
+        )
 
-            # Persist trace before publishing — if trace write fails, we'd
-            # rather retry than emit a result without provenance.
-            await trace.write(
-                task=task,
-                result=result,
-                source_channel=task.response_routing.primary.channel,
-                token_usage=token_usage,
-                duration_ms=duration_ms,
-            )
+        duration_ms = int((time.perf_counter() - t_start) * 1000)
+        token_usage = usage_acc.totals()
 
-            if task.shadow:
-                # Trace-only — no egress publish. Used by A/B comparator
-                # tasks etc. so the user only sees the primary workflow.
-                await queue.ack(message_id)
-                log.info(
-                    "agents.result.shadow",
-                    task_id=task.task_id,
-                    workflow=task.workflow,
-                    decision=output.get("cto_output", {}).get("decision"),
-                )
-                continue
+        await trace.write(
+            task=task,
+            result=result,
+            source_channel=task.response_routing.primary.channel,
+            token_usage=token_usage,
+            duration_ms=duration_ms,
+        )
 
-            await queue.publish_result(result)
+        if task.shadow:
             await queue.ack(message_id)
-            log.info(
-                "agents.result.published",
-                task_id=task.task_id,
-                result_id=result.result_id,
-                decision=output.get("cto_output", {}).get("decision"),
-            )
+            log.info("agents.result.shadow", task_id=task.task_id,
+                     workflow=task.workflow,
+                     decision=output.get("cto_output", {}).get("decision"))
+            return
+
+        await queue.publish_result(result)
+        await queue.ack(message_id)
+        log.info("agents.result.published", task_id=task.task_id,
+                 result_id=result.result_id,
+                 decision=output.get("cto_output", {}).get("decision"))
+
+    try:
+        async for message_id, task, delivery in queue.reclaim_stale():
+            await _process(message_id, task, delivery, reclaimed=True)
+
+        async for message_id, task, delivery in queue.consume():
+            await _process(message_id, task, delivery, reclaimed=False)
     finally:
         await trace.close()
         await queue.close()

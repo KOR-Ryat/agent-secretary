@@ -29,6 +29,37 @@ class AgentsQueue:
             if "BUSYGROUP" not in str(e):
                 raise
 
+    async def reclaim_stale(self, idle_ms: int = 300_000) -> None:
+        """Claim pending messages idle longer than idle_ms and re-deliver them.
+
+        Called once at startup so messages orphaned by a previous crash or
+        restart are picked up instead of sitting in the PEL forever.
+        """
+        cursor = "0-0"
+        while True:
+            result = await self._redis.xautoclaim(
+                STREAM_TASKS,
+                self._group,
+                self._consumer,
+                min_idle_time=idle_ms,
+                start_id=cursor,
+                count=100,
+            )
+            # xautoclaim returns (next_cursor, entries, deleted_ids)
+            next_cursor, entries, _ = result
+            for message_id, fields in entries:
+                raw = fields.get(b"task") or fields.get("task")
+                if raw is None:
+                    await self.ack(message_id)
+                    continue
+                payload = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+                task = TaskSpec.model_validate_json(payload)
+                delivery = await self._delivery_count(message_id)
+                yield message_id, task, delivery
+            if next_cursor in (b"0-0", "0-0"):
+                break
+            cursor = next_cursor
+
     async def consume(self, block_ms: int = 5000) -> AsyncIterator[tuple[str, TaskSpec, int]]:
         while True:
             try:
