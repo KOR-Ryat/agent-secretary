@@ -81,11 +81,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - agent_workspace:/var/agent-workspace
-      # Mount host's Claude Code config so the SDK can use the OAuth
-      # session when ANTHROPIC_API_KEY is absent. Read-write because
-      # the SDK writes session/cache files; on a dev box that's fine.
+      # Mount host's Claude credentials for OAuth auth.
+      # .claude.json (GrowthBook feature flag cache) is intentionally NOT
+      # mounted — parallel CLI processes corrupt it via concurrent writes.
+      # The container creates its own throwaway copy on each restart.
       - ${HOME}/.claude:/home/agent/.claude
-      - ${HOME}/.claude.json:/home/agent/.claude.json
     depends_on:
       redis:
         condition: service_healthy
