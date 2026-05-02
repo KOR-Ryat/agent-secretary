@@ -27,7 +27,7 @@
 - 외부에 노출된 API → 외부 API specialist
 - 공개 SDK → SDK specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - protobuf field number 의 재사용 (이전 필드의 데이터가 새 필드로 잘못 해석)
 - 사용 중인 enum 값 제거
@@ -52,9 +52,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "proto/user.proto:15",
   "description": "User 메시지에서 field number 5 (string username) 가 제거됨. 'reserved 5;' 가 추가되지 않음.",
-  "threat_or_impact": "(1) 다른 서비스가 옛 스키마로 직렬화한 메시지를 받으면 username 데이터가 알 수 없는 필드로 무시됨 (배포 순서 의존). (2) 미래에 누군가 field number 5 를 다른 의미로 재사용하면 옛 데이터를 잘못 해석해 silent corruption."
+  ""threat_or_impact": "(1) 다른 서비스가 옛 스키마로 직렬화한 메시지를 받으면 username 데이터가 알 수 없는 필드로 무시됨 (배포 순서 의존). (2) 미래에 누군가 field number 5 를 다른 의미로 재사용하면 옛 데이터를 잘못 해석해 silent corruption.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

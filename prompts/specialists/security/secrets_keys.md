@@ -25,7 +25,7 @@
 - 암호화 알고리즘 자체 → 암호화 specialist
 - 인증 흐름 → AuthN/AuthZ specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - commit 된 secret (실제 키, 토큰, 비밀번호 — placeholder/example 제외)
 - 평문 비밀번호 저장
@@ -49,9 +49,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "src/clients/aws.py:8",
   "description": "AWS access key 형태의 문자열 'AKIA...' 가 소스 코드에 하드코딩됨. .env.example 이나 fixtures 가 아닌 src/ 경로.",
-  "threat_or_impact": "이 키가 유효하다면 git 히스토리에 영구 노출. 즉시 회수·로테이션 필요."
+  ""threat_or_impact": "이 키가 유효하다면 git 히스토리에 영구 노출. 즉시 회수·로테이션 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

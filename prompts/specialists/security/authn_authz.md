@@ -27,7 +27,7 @@
 - 암호화 알고리즘 자체 → 암호화 specialist
 - 비밀 저장 → 비밀·키 관리 specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 인증 우회 (보호되어야 할 라우트가 미들웨어 누락)
 - 인가 누락 (다른 사용자 리소스에 접근 가능)
@@ -52,9 +52,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "api/admin_routes.py:42",
   "description": "신규 라우트 GET /admin/users/{id} 가 require_admin 데코레이터 없이 등록됨. 같은 파일의 다른 라우트는 모두 데코레이터 사용 중.",
-  "threat_or_impact": "임의의 인증된 사용자가 admin 사용자 정보를 조회 가능."
+  ""threat_or_impact": "임의의 인증된 사용자가 admin 사용자 정보를 조회 가능.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

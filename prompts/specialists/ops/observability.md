@@ -25,7 +25,7 @@
 - 로그에 PII 노출 → PII specialist
 - 알림(alerting) 룰 자체 → 인프라·IaC specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 핵심 작업 (결제, 인증, 데이터 변경) 에 메트릭/로그 0 (관측 불가)
 - 메트릭 라벨에 고카디널리티 값 (user_id, request_id 등 — Prometheus 메모리 폭발)
@@ -47,9 +47,10 @@
 
 ```json
 {
-  "severity": "warning",
+  "severity": "P2",
   "location": "metrics/payments.py:12",
   "description": "신규 메트릭 'payment_completed' 의 라벨에 user_id 가 포함됨.",
-  "threat_or_impact": "사용자 수가 N 이면 메트릭 시리즈가 N 배 증가. Prometheus 메모리 사용량 폭발 위험. user_id 대신 user_segment 같은 저카디널리티 라벨로 변경 필요."
+  ""threat_or_impact": "사용자 수가 N 이면 메트릭 시리즈가 N 배 증가. Prometheus 메모리 사용량 폭발 위험. user_id 대신 user_segment 같은 저카디널리티 라벨로 변경 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

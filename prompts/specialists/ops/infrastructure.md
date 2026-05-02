@@ -26,7 +26,7 @@
 - IaC 안의 secret 노출 자체 → 비밀·키 관리 specialist
 - 새 리소스 도입의 비용 영향 → 비용 specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - prod 환경에 직접 영향을 주는 검증 안 된 변경
 - IAM policy 가 `Action: '*'` 또는 `Resource: '*'` (와일드카드 권한)
@@ -51,9 +51,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "infra/iam.tf:23",
   "description": "신규 IAM policy 'lambda-exec' 가 Action: '*', Resource: '*' 로 정의됨.",
-  "threat_or_impact": "이 Lambda 가 침해되면 모든 AWS 리소스에 대한 임의 작업 가능. 최소 권한 원칙으로 필요한 Action·Resource 만 명시 필요."
+  ""threat_or_impact": "이 Lambda 가 침해되면 모든 AWS 리소스에 대한 임의 작업 가능. 최소 권한 원칙으로 필요한 Action·Resource 만 명시 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

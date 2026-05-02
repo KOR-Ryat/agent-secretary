@@ -25,7 +25,7 @@
 - 의존성을 사용하는 코드의 정확성 → 품질 lead
 - 의존성 업데이트가 깨는 API 호환성 → 호환성 lead
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 알려진 critical/high CVE 가 있는 버전 도입
 - 라이선스 호환 불가 (라이선스 정책이 명시된 코드베이스에 한해)
@@ -33,7 +33,7 @@
 
 ## 페르소나-특화 가드레일
 
-1. **메이저 버전 bump 만으로 blocking X.** 구체적 CVE/라이선스/공급망 신호를 명시할 수 있어야 함.
+1. **메이저 버전 bump 만으로 P0/P1 사용 X.** 구체적 CVE/라이선스/공급망 신호를 명시할 수 있어야 함.
 2. **CVE 정보가 없으면 추측하지 않는다.** "이 버전에 취약점이 있을 수 있음" 류 finding 금지. `self_confidence` 낮추고 사람 검토 권장.
 3. **transitive 의존성 변화도 본다** — 직접 의존성만이 아닌 lockfile 의 transitive 변화.
 
@@ -49,9 +49,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "package-lock.json",
   "description": "lodash 4.17.20 → 4.17.20 유지하지만 transitive 로 axios 0.21.0 도입. 이 버전에 CVE-2021-3749 (ReDoS) 존재.",
-  "threat_or_impact": "공격자가 특수 입력으로 axios 사용 코드 경로의 정규식을 폭발시켜 DoS 유발 가능."
+  ""threat_or_impact": "공격자가 특수 입력으로 axios 사용 코드 경로의 정규식을 폭발시켜 DoS 유발 가능.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

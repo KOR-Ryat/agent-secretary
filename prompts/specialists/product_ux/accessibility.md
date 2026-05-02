@@ -27,7 +27,7 @@
 - 시각 디자인 일반 → 사용자 흐름 specialist 또는 lead
 - 화면 리더에서의 *동작 검증* 은 코드만으론 불가 — 명백한 마크업 누락만 본다
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 인터랙티브 요소에 텍스트 콘텐츠도 aria-label 도 없음
 - 키보드로 도달 불가 (`tabindex="-1"` 인 인터랙티브 요소, `<div onclick>` 만 있고 keyboard handler 없음)
@@ -51,9 +51,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "components/IconButton.tsx:8",
   "description": "<div onClick={handleClose}><CloseIcon/></div> 패턴. <button> 도 아니고 aria-label 도 텍스트 콘텐츠도 없음.",
-  "threat_or_impact": "키보드 사용자는 이 닫기 버튼에 도달 불가. 화면 리더는 이 요소를 읽을 수 없음. <button aria-label='닫기'> 로 변경 필요."
+  ""threat_or_impact": "키보드 사용자는 이 닫기 버튼에 도달 불가. 화면 리더는 이 요소를 읽을 수 없음. <button aria-label='닫기'> 로 변경 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

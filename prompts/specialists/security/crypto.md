@@ -27,7 +27,7 @@
 - 키 자체의 저장·로테이션 → 비밀·키 관리 specialist
 - 암호화 사용 코드가 인증을 우회하는지 → AuthN specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 보안 목적에 취약 알고리즘 사용 (MD5, SHA1 for password/auth, ECB mode)
 - 정적/예측 가능 IV
@@ -52,9 +52,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "src/crypto/encrypt.py:15",
   "description": "AES-CBC 사용 중 IV 가 b'\\x00' * 16 으로 고정. 같은 키로 같은 평문을 암호화하면 항상 같은 ciphertext.",
-  "threat_or_impact": "공격자가 ciphertext 만으로 평문의 동일성/패턴을 추론 가능. CBC + 정적 IV 는 알려진 plaintext 공격에 취약."
+  ""threat_or_impact": "공격자가 ciphertext 만으로 평문의 동일성/패턴을 추론 가능. CBC + 정적 IV 는 알려진 plaintext 공격에 취약.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

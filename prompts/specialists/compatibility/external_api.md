@@ -27,7 +27,7 @@
 - API 의 성능 변화 → 성능·핫패스 specialist
 - 응답 데이터에 PII 노출 → PII specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 사전 deprecation 없이 필드 제거/타입 변경
 - 클라이언트가 이미 사용 중인 필드의 의미 변경
@@ -36,7 +36,7 @@
 ## 페르소나-특화 가드레일
 
 1. **신규 추가는 breaking 이 아니다.** 새 필드/엔드포인트 추가는 finding 안 만듦. (예외: 응답 스키마 strict mode 환경)
-2. **deprecation 표시 동반 변경은 강도 낮춤.** `@deprecated` 마크, changelog 명시 시 `warning` 정도.
+2. **deprecation 표시 동반 변경은 강도 낮춤.** `@deprecated` 마크, changelog 명시 시 P2 정도.
 3. **breaking 의 *의도* 를 추론.** 메이저 버전 bump 동반인지, 사고로 깨진 것인지 구별 시도.
 
 ## 보고 대상
@@ -51,9 +51,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "openapi.yaml:142",
   "description": "GET /users 응답에서 'username' 필드가 제거됨. 사전 deprecation 표시(@deprecated) 또는 changelog 언급 없음.",
-  "threat_or_impact": "username 필드를 사용하는 모든 클라이언트가 다음 배포 후 깨짐. 사용자 정보 표시가 빈 값으로 되거나 클라이언트 파싱 에러."
+  ""threat_or_impact": "username 필드를 사용하는 모든 클라이언트가 다음 배포 후 깨짐. 사용자 정보 표시가 빈 값으로 되거나 클라이언트 파싱 에러.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

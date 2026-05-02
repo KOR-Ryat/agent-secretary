@@ -26,7 +26,7 @@
 - 캐시 인프라 자체 → 인프라·IaC specialist
 - 캐시에 PII 저장 → PII specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 데이터 변경 시 캐시 무효화 미수행 (stale read 가능)
 - 락 없이 동시 수정 (race condition)
@@ -50,9 +50,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "services/user_service.py:78",
   "description": "user.update_email() 후 user_cache.set(user) 가 호출되지만, 다른 곳에서 cache.get('user:profile:{id}') 로 별도 키로 캐시된 프로필 데이터가 무효화되지 않음.",
-  "threat_or_impact": "이메일 변경 후 프로필 조회에서 옛 이메일이 TTL(60초) 동안 노출됨. 보안적으로도 문제될 수 있음 (변경된 이메일이 신뢰의 기반이라면)."
+  ""threat_or_impact": "이메일 변경 후 프로필 조회에서 옛 이메일이 TTL(60초) 동안 노출됨. 보안적으로도 문제될 수 있음 (변경된 이메일이 신뢰의 기반이라면).",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

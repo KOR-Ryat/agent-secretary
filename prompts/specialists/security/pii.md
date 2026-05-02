@@ -26,7 +26,7 @@
 - PII 의 암호화 알고리즘 → 암호화 specialist
 - 비밀번호 해시 → 비밀·키 관리 specialist (저장) / 암호화 specialist (알고리즘)
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 비밀번호/SSN/카드번호의 평문 로그
 - PII 가 외부 시스템에 평문으로 전송 (분석·로깅 SaaS 포함)
@@ -50,9 +50,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "api/auth.py:38",
   "description": "logger.info(f'sign in: {user}') 가 user 객체 전체를 직렬화. user.password_hash 와 user.ssn 이 __repr__ 에 포함됨.",
-  "threat_or_impact": "비밀번호 해시와 SSN 이 운영 로그(외부 SaaS 로 전송됨)에 평문 기록. 로그 접근 권한자 또는 로그 SaaS 침해 시 노출."
+  ""threat_or_impact": "비밀번호 해시와 SSN 이 운영 로그(외부 SaaS 로 전송됨)에 평문 기록. 로그 접근 권한자 또는 로그 SaaS 침해 시 노출.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

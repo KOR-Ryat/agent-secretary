@@ -26,7 +26,7 @@
 - 컴포넌트 내부 접근성 → 접근성 specialist
 - 문자열 i18n → i18n specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 사용자가 진입할 수 없는 페이지 (어떤 라우트/링크도 가리키지 않음)
 - 라우트 제거되었는데 redirect 또는 안내 없음
@@ -50,9 +50,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "src/routes.tsx:45",
   "description": "/old-settings 라우트가 제거됐지만 /settings 로의 redirect 가 추가되지 않음. 외부 검색 결과나 북마크가 이 경로를 가리킬 수 있음.",
-  "threat_or_impact": "기존 사용자가 북마크/외부 링크로 진입 시 404. redirect 추가 또는 최소한 '이 페이지는 이동되었습니다' 안내 페이지 필요."
+  ""threat_or_impact": "기존 사용자가 북마크/외부 링크로 진입 시 404. redirect 추가 또는 최소한 '이 페이지는 이동되었습니다' 안내 페이지 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

@@ -28,7 +28,7 @@
 - 비밀 노출 → 비밀·키 관리 specialist
 - 응답 데이터의 PII 노출 → PII specialist
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 사용자 입력이 검증/이스케이프 없이 SQL/Shell/HTML/Path 에 직접 삽입
 - 외부 데이터로 deserialize 가 일어나는데 검증 없음
@@ -51,9 +51,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "api/search.py:23",
   "description": "search_term 이 f-string 으로 직접 SQL 에 삽입됨: db.execute(f\"SELECT * FROM items WHERE name LIKE '%{search_term}%'\").",
-  "threat_or_impact": "공격자가 search_term 에 `' OR 1=1; --` 를 넣으면 모든 row 반환. `'; DROP TABLE items; --` 로 데이터 손실까지 가능."
+  ""threat_or_impact": "공격자가 search_term 에 `' OR 1=1; --` 를 넣으면 모든 row 반환. `'; DROP TABLE items; --` 로 데이터 손실까지 가능.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

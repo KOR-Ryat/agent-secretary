@@ -26,7 +26,7 @@
 - 큐 자체의 인프라 (Redis/Kafka 설정) → 인프라·IaC specialist
 - 작업 코드의 비즈니스 로직 정확성 → 품질 lead
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 부작용 있는 작업이 멱등하지 않은데 재시도 가능 (예: 결제, 외부 API POST)
 - 무한 재시도 (max retries 미설정)
@@ -51,9 +51,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "workers/email_worker.py:45",
   "description": "send_email job 이 idempotency_key 없이 SES API 를 호출. SQS 의 at-least-once 환경에서 동일 메시지 중복 처리 시 같은 메일이 N 번 발송됨.",
-  "threat_or_impact": "사용자에게 동일 메일 중복 수신. (job_id, recipient) 기반 dedup 캐시 또는 SES MessageDeduplicationId 활용 필요."
+  ""threat_or_impact": "사용자에게 동일 메일 중복 수신. (job_id, recipient) 기반 dedup 캐시 또는 SES MessageDeduplicationId 활용 필요.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

@@ -29,7 +29,7 @@
 - 코드 정확성 → 품질 lead
 - 외부 API/SDK 호환성 → 호환성 lead
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 비가역 변경 (스키마 drop/rename, 외부 계약 breaking, 데이터 손실 가능 변경)
 - 핫패스 회귀 가능성 (벤치마크/분석으로 입증되거나 specialist 가 명시한 경우)

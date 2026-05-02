@@ -27,7 +27,7 @@
 - DB 자격증명 노출 → 보안 lead
 - 마이그레이션이 깨는 외부 API 응답 스키마 → 호환성 lead
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 비가역적 데이터 손실 (DROP COLUMN/TABLE 의 down 미정의 또는 데이터 백업 없음)
 - 운영 중단 가능성 (큰 테이블 ALTER 가 락 획득, 온라인 DDL 미사용)
@@ -59,9 +59,10 @@
 
 ```json
 {
-  "severity": "blocking",
+  "severity": "P0",
   "location": "migrations/2026_04_30_add_user_email_required.sql:3",
   "description": "users 테이블에 NOT NULL email 컬럼이 default 없이 추가됨. 기존 row 가 있을 가능성 + 구버전 코드의 INSERT 가 email 미제공 시 실패.",
-  "threat_or_impact": "(1) 마이그레이션 실행 시 기존 데이터에 NULL 이 있으면 ALTER 자체가 실패. (2) 점진 배포 중 구버전 인스턴스가 email 없이 INSERT 시도 → 트랜잭션 실패."
+  ""threat_or_impact": "(1) 마이그레이션 실행 시 기존 데이터에 NULL 이 있으면 ALTER 자체가 실패. (2) 점진 배포 중 구버전 인스턴스가 email 없이 INSERT 시도 → 트랜잭션 실패.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

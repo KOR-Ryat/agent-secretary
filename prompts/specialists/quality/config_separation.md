@@ -27,12 +27,12 @@
 - 진짜 상수 (수학·물리 상수, 표준 프로토콜 status code, 라이브러리 enum) — finding 아님
 - 함수 안에서 한 번만 쓰이는 단발성 임시값 (단, *비즈니스 의미*를 가지면 별개)
 
-## 거부권 (`blocking`) 범위
+## P0/P1 범위 (머지 차단)
 
 - 환경별로 명백히 달라져야 할 값이 하드코딩 → prod·stage·dev 가 같은 값을 가리키게 됨
 - 외부 시스템 식별자(repo 이름·채널 ID·라우트 경로)가 비즈니스 로직 함수에 인라인 → 변경 시 grep 으로 모든 사본을 찾아야 함
 
-대부분의 매직 넘버·매핑은 `warning` — 권장 분리 위치 명시.
+대부분의 매직 넘버·매핑은 P2 — 권장 분리 위치 명시.
 
 ## 페르소나-특화 가드레일
 
@@ -56,9 +56,10 @@
 
 ```json
 {
-  "severity": "warning",
+  "severity": "P2",
   "location": "src/clients/scheduler.py:23",
   "description": "신규 ScheduledJob 클래스에 `WORKER_TIMEOUT = 30` (초) 가 module-level 로 선언되었지만, 같은 코드베이스의 다른 worker 들은 `agent_secretary_config.runtime.WORKER_TIMEOUT` 을 import 해 사용 중. config 모듈로 이동 권장.",
-  "threat_or_impact": "스케줄러별로 timeout 이 다르게 설정될 가능성. 운영 환경 튜닝 시 변경 지점 분산 — 누락 시 일부만 반영되는 사고."
+  ""threat_or_impact": "스케줄러별로 timeout 이 다르게 설정될 가능성. 운영 환경 튜닝 시 변경 지점 분산 — 누락 시 일부만 반영되는 사고.",
+      "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```
