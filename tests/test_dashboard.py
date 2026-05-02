@@ -394,7 +394,7 @@ def test_compare_page_serves_html():
 
     app = _make_app(trace_reader=AsyncMock())
     client = TestClient(app)
-    res = client.get("/compare/abc-123")
+    res = client.get("/static/dashboard/compare/abc-123")
     assert res.status_code == 200
     assert "A/B compare" in res.text
 

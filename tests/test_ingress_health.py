@@ -49,4 +49,4 @@ def test_health_route_registered_in_main_app(monkeypatch, tmp_path):
     # Confirm /health is on the routes list without invoking the lifespan
     # (which would try to connect to Redis).
     paths = {getattr(r, "path", None) for r in app.routes}
-    assert "/health" in paths
+    assert "/public/health" in paths

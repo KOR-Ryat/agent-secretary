@@ -57,6 +57,29 @@ def _pr_payload(*, action: str = "opened", draft: bool = False) -> dict:
     }
 
 
+def _label_payload(*, label: str = "agent:request-review", draft: bool = False) -> dict:
+    return {
+        "action": "labeled",
+        "label": {"name": label},
+        "pull_request": {
+            "number": 42,
+            "title": "fix: tighten input validation",
+            "body": "Adds parameterized query.",
+            "user": {"login": "alice"},
+            "head": {"sha": "abc123"},
+            "base": {"sha": "def456"},
+            "html_url": "https://github.com/owner/repo/pull/42",
+            "draft": draft,
+        },
+        "repository": {
+            "owner": {"login": "owner"},
+            "name": "repo",
+            "full_name": "owner/repo",
+        },
+        "installation": {"id": 99},
+    }
+
+
 def _post(
     client: TestClient,
     *,
@@ -70,7 +93,7 @@ def _post(
         headers["X-Hub-Signature-256"] = signature
     if delivery is not None:
         headers["X-GitHub-Delivery"] = delivery
-    return client.post("/channels/github/webhook", content=body, headers=headers)
+    return client.post("/public/channels/github/webhook", content=body, headers=headers)
 
 
 # --- HMAC ---------------------------------------------------------------
@@ -91,7 +114,7 @@ def test_signature_verification(signature_factory, expected_status):
     secret = "test_secret_xyz"
     client, publisher = _make_client(secret)
 
-    body = json.dumps(_pr_payload(action="opened")).encode()
+    body = json.dumps(_label_payload()).encode()
     res = _post(
         client,
         body=body,
@@ -121,7 +144,7 @@ def test_signature_check_skipped_when_secret_unset():
     is always set.
     """
     client, publisher = _make_client(None)
-    body = json.dumps(_pr_payload(action="opened")).encode()
+    body = json.dumps(_label_payload()).encode()
     res = _post(client, body=body, event_type="pull_request", signature=None)
     assert res.status_code == 200
     publisher.publish.assert_awaited_once()
@@ -164,9 +187,9 @@ def test_unsupported_event_type_skipped():
 @pytest.mark.parametrize(
     "action,should_publish",
     [
-        ("opened", True),
-        ("synchronize", True),
-        ("reopened", True),
+        ("opened", False),
+        ("synchronize", False),
+        ("reopened", False),
         ("closed", False),
         ("labeled", False),
         ("review_requested", False),
@@ -207,10 +230,10 @@ def test_draft_pr_is_skipped():
 # --- Normalization ------------------------------------------------------
 
 
-def test_pr_opened_normalizes_to_raw_event():
+def test_pr_label_request_normalizes_to_raw_event():
     secret = "s"
     client, publisher = _make_client(secret)
-    body = json.dumps(_pr_payload(action="opened")).encode()
+    body = json.dumps(_label_payload()).encode()
     res = _post(
         client,
         body=body,
@@ -231,7 +254,7 @@ def test_pr_opened_normalizes_to_raw_event():
 
     # Normalized fields.
     n = event.normalized
-    assert n["trigger"] == "pr_opened"
+    assert n["trigger"] == "label_request"
     assert n["repo"] == {
         "owner": "owner",
         "name": "repo",
@@ -255,7 +278,7 @@ def test_pr_opened_normalizes_to_raw_event():
 def test_event_id_falls_back_to_uuid_when_delivery_header_missing():
     secret = "s"
     client, publisher = _make_client(secret)
-    body = json.dumps(_pr_payload()).encode()
+    body = json.dumps(_label_payload()).encode()
     res = _post(
         client,
         body=body,
