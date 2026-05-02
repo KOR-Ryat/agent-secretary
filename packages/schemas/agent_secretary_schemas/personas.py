@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 
 
 class Finding(BaseModel):
-    severity: Literal["info", "warning", "blocking"]
+    severity: Literal["P0", "P1", "P2", "P3", "P4"]
     location: str
     description: str
     threat_or_impact: str
+    suggestion: str = ""
 
 
 # Domains used for cross-A/B comparison; matches the value of
