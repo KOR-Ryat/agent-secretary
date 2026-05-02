@@ -113,11 +113,13 @@
 
 ## 출력 (JSON)
 
+**`reasoning` 필드는 반드시 1-2 문장 이내.** 핵심 결정 근거만 담는다. 세부 분석·수치 나열은 금지 — 그것은 페르소나 리포트에 이미 있다.
+
 ```json
 {
   "decision": "auto-merge | request-changes | escalate-to-human",
   "confidence": 0.0,
-  "reasoning": "이 결정에 도달한 근거. 어떤 페르소나의 어떤 신호가 결정적이었는지.",
+  "reasoning": "결정 근거 1-2 문장. 핵심 신호만. 세부 분석 금지.",
   "trigger_signals": [
     "운영 lead blocking (마이그레이션 비가역)",
     "변경 영역: payments/ (high-risk)",
