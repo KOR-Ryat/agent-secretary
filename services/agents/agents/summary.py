@@ -70,9 +70,12 @@ def _render_findings(findings: list[dict[str, Any]]) -> list[str]:
         badge = _sev_badge(sev)
         loc_str = f" — `{loc}`" if loc else ""
         lines.append(f"**{badge}**{loc_str}")
-        lines.append(f"{desc}")
+        lines.append("")
+        lines.append(desc)
+        lines.append("")
         if impact:
             lines.append(f"> **영향:** {impact}")
+            lines.append(">")
         if suggestion:
             lines.append(f"> **제안:** {suggestion}")
         lines.append("")
