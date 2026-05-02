@@ -178,7 +178,7 @@ async def test_pipeline_blocking_finding_routes_escalate(monkeypatch):
         "self_confidence": 0.85,
         "findings": [
             {
-                "severity": "blocking",
+                "severity": "P0",
                 "location": "auth/session.py:42",
                 "description": "토큰 만료 검사 누락",
                 "threat_or_impact": "공격자가 만료된 세션을 재사용 가능",
@@ -330,7 +330,7 @@ async def test_pipeline_with_quality_config_separation_specialist(monkeypatch):
         "self_confidence": 0.8,
         "findings": [
             {
-                "severity": "warning",
+                "severity": "P2",
                 "location": "src/clients/scheduler.py:23",
                 "description": "WORKER_TIMEOUT 매직 넘버. agent_secretary_config 로 이동 권장.",
                 "threat_or_impact": "환경별 튜닝 시 변경 지점이 분산.",

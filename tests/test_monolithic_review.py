@@ -79,7 +79,7 @@ def test_parse_output_with_findings_carries_domain():
         "```json\n"
         '{"decision":"escalate-to-human","confidence":0.4,"reasoning":"x",'
         '"findings":['
-        '{"domain":"security","severity":"blocking","location":"auth/x.py:1",'
+        '{"domain":"security","severity":"P0","location":"auth/x.py:1",'
         '"description":"missing","threat_or_impact":"breach"}'
         ']}\n'
         "```"
@@ -88,7 +88,7 @@ def test_parse_output_with_findings_carries_domain():
     assert len(out.findings) == 1
     f = out.findings[0]
     assert f.domain == "security"
-    assert f.severity == "blocking"
+    assert f.severity == "P0"
 
 
 def test_parse_output_rejects_invalid_domain():
@@ -104,7 +104,7 @@ def test_parse_output_rejects_invalid_domain():
         "```json\n"
         '{"decision":"auto-merge","confidence":0.5,"reasoning":"x",'
         '"findings":['
-        '{"domain":"made_up","severity":"info","location":"x",'
+        '{"domain":"made_up","severity":"P2","location":"x",'
         '"description":"x","threat_or_impact":"x"}'
         "]}\n"
         "```"
