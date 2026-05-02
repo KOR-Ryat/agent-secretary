@@ -113,13 +113,24 @@
 
 ## 출력 (JSON)
 
-**`reasoning` 필드는 반드시 1-2 문장 이내.** 핵심 결정 근거만 담는다. 세부 분석·수치 나열은 금지 — 그것은 페르소나 리포트에 이미 있다.
+**`reasoning` 필드는 반드시 1-2 문장 이내.** 핵심 결정 근거만, 사람이 읽는 언어로.
+
+금지:
+- JSON 필드명·내부 용어 (`unresolved_specialist_dissent`, `dispatcher_confidence`, `test_ratio` 등)
+- 수치 나열 (`0.55`, `11개`, `0.0`)
+- 페르소나 리포트에 이미 있는 세부 분석
+
+예시:
+- ❌ `"unresolved_specialist_dissent 비어있지 않아 escalate-to-human"`
+- ✅ `"보안 스페셜리스트와 리드 간 의견 충돌이 해소되지 않아 사람 검토가 필요하다."`
+- ❌ `"P2 finding 11개, dispatcher_confidence 0.55"`
+- ✅ `"여러 도메인이 동일 영역의 문제를 지적하고 있어 수정 요청한다."`
 
 ```json
 {
   "decision": "auto-merge | request-changes | escalate-to-human",
   "confidence": 0.0,
-  "reasoning": "결정 근거 1-2 문장. 핵심 신호만. 세부 분석 금지.",
+  "reasoning": "결정 근거 1-2 문장. 사람이 읽는 언어로. 내부 필드명·수치 금지.",
   "trigger_signals": [
     "운영 lead blocking (마이그레이션 비가역)",
     "변경 영역: payments/ (high-risk)",
