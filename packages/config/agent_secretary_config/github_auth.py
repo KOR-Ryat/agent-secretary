@@ -54,7 +54,7 @@ class GitHubAppAuth:
 
     def _make_jwt(self) -> str:
         now = int(time.time())
-        payload = {"iat": now - 60, "exp": now + 540, "iss": self.app_id}
+        payload = {"iat": now - 60, "exp": now + 540, "iss": str(self.app_id)}
         return jwt.encode(payload, self.private_key, algorithm="RS256")
 
     async def _fetch_token(self) -> tuple[str, float]:
