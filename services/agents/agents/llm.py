@@ -18,6 +18,10 @@ the call still works — recording is a no-op.
 
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
+
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -42,22 +46,35 @@ async def call_text(
     per-persona cost report would need it later if we ever break it
     out.
     """
+    # Each call gets its own HOME so parallel CLI subprocesses don't
+    # corrupt the shared ~/.claude.json (GrowthBook cache) via concurrent writes.
+    tmp_home = tempfile.mkdtemp(prefix="claude-home-")
+    real_home = os.environ.get("HOME", "/root")
+    claude_src = os.path.join(real_home, ".claude")
+    claude_dst = os.path.join(tmp_home, ".claude")
+    if os.path.isdir(claude_src):
+        shutil.copytree(claude_src, claude_dst, symlinks=True)
+
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         model=model,
         tools=[],
         max_turns=1,
         permission_mode="bypassPermissions",
+        env={"HOME": tmp_home},
     )
     chunks: list[str] = []
     result_msg: ResultMessage | None = None
-    async for message in query(prompt=user_message, options=options):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    chunks.append(block.text)
-        elif isinstance(message, ResultMessage):
-            result_msg = message
+    try:
+        async for message in query(prompt=user_message, options=options):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        chunks.append(block.text)
+            elif isinstance(message, ResultMessage):
+                result_msg = message
+    finally:
+        shutil.rmtree(tmp_home, ignore_errors=True)
 
     # ResultMessage.result is the SDK's flattened final answer; fall
     # back to concatenated assistant text if absent (mirrors the
