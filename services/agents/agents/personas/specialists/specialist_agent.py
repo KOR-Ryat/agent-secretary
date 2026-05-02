@@ -51,6 +51,9 @@ SPECIALIST_CATALOG: tuple[SpecialistSpec, ...] = (
     SpecialistSpec("i18n", "i18n", "specialists/product_ux/i18n.md", "제품·UX", "product_ux"),
     # 품질 산하
     SpecialistSpec("설정 분리", "config_separation", "specialists/quality/config_separation.md", "품질", "quality"),
+    SpecialistSpec("컨벤션", "convention", "specialists/quality/convention.md", "품질", "quality"),
+    SpecialistSpec("테스트 품질", "test_quality", "specialists/quality/test_quality.md", "품질", "quality"),
+    SpecialistSpec("복잡도", "complexity", "specialists/quality/complexity.md", "품질", "quality"),
 )
 
 SPECIALIST_BY_NAME: dict[str, SpecialistSpec] = {s.name: s for s in SPECIALIST_CATALOG}
