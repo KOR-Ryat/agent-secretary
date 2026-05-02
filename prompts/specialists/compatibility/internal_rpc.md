@@ -4,7 +4,9 @@
 
 공통 정의는 [`../../_shared.md`](../../_shared.md) 참조.
 
-활성화 트리거: `*.proto`, GraphQL 스키마, 이벤트 페이로드 정의.
+활성화 트리거: `*.proto`, GraphQL 스키마, 이벤트 페이로드 정의,
+Pydantic/dataclass 기반 내부 계약 모델
+(`*schemas*.py`, `*schema.py`, `*models*.py`, `*events*.py`, `*payloads*.py`, `packages/schemas/**` 등).
 
 ---
 
@@ -20,6 +22,11 @@
 - GraphQL 스키마의 nullable 변경, 필드 제거
 - 이벤트 페이로드의 필드 의미·타입 변경
 - 서비스/메서드의 제거 (다른 서비스가 호출 중일 수 있음)
+- **Pydantic/dataclass 내부 계약 모델 변경**
+  - 필드 제거·이름 변경 (직렬화 키 변경 → 다른 서비스/큐 메시지 파싱 실패)
+  - 필수 필드 추가 (`default` 없이) → 구버전 producer 가 보낸 메시지 역직렬화 실패
+  - `Literal` 타입의 허용 값 축소 → 기존 값이 `ValidationError`
+  - `model_validator` / `field_validator` 추가로 기존 페이로드가 거부되는 경우
 
 ## 도메인 외 (책임 아님)
 
@@ -33,6 +40,8 @@
 - 사용 중인 enum 값 제거
 - field 제거 시 reserved 처리 누락
 - 서비스 간 메시지의 nullable 추가/제거 (한쪽이 새 스키마 인식 못하면 깨짐)
+- Pydantic 모델에서 `default` 없이 필수 필드 추가 (Redis/큐에 쌓인 구버전 메시지 즉시 실패)
+- `Literal` 허용 값 축소로 기존 데이터 `ValidationError` (DB/큐의 이미 저장된 값 포함)
 
 ## 페르소나-특화 가드레일
 

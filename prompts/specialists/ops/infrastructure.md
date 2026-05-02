@@ -4,7 +4,9 @@
 
 공통 정의는 [`../../_shared.md`](../../_shared.md) 참조.
 
-활성화 트리거: `*.tf`, `k8s/**`, `helm/**`, `Dockerfile`, CI 워크플로우.
+활성화 트리거: `*.tf`, `k8s/**`, `helm/**`, `Dockerfile*`, `docker-compose*`, CI 워크플로우 (`.github/**`),
+`Makefile`, `pyproject.toml`, `setup.cfg`, `requirements*.txt`, `*.ini`, `*.toml` 등
+빌드·패키징·환경 구성 파일.
 
 ---
 
@@ -20,6 +22,8 @@
 - 컨테이너 이미지·Dockerfile 보안 (root 사용, 큰 base image)
 - CI 워크플로우 변경 (secrets 노출, 임의 코드 실행 권한)
 - 네트워크 설정 (열린 포트, 보안 그룹)
+- 빌드·패키징 설정 변경이 런타임 환경에 미치는 영향
+  (pyproject.toml 의존성 변경, Makefile 빌드 타겟 변경, requirements.txt 핀 제거 등)
 
 ## 도메인 외 (책임 아님)
 
