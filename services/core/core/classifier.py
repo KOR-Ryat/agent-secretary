@@ -66,6 +66,7 @@ def _pr_review_input(event: RawEvent) -> dict:
     pr = event.normalized.get("pr", {})
     return {
         "pr": {
+            "number": pr.get("number"),
             "title": pr.get("title", ""),
             "description": pr.get("description", ""),
             "author": pr.get("author", ""),
@@ -77,6 +78,7 @@ def _pr_review_input(event: RawEvent) -> dict:
             "url": pr.get("url"),
         },
         "repo": event.normalized.get("repo", {}),
+        "installation_id": event.normalized.get("installation_id"),
     }
 
 
