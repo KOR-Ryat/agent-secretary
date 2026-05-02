@@ -55,7 +55,7 @@
   "severity": "P0",
   "location": "src/crypto/encrypt.py:15",
   "description": "AES-CBC 사용 중 IV 가 b'\\x00' * 16 으로 고정. 같은 키로 같은 평문을 암호화하면 항상 같은 ciphertext.",
-  ""threat_or_impact": "공격자가 ciphertext 만으로 평문의 동일성/패턴을 추론 가능. CBC + 정적 IV 는 알려진 plaintext 공격에 취약.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "공격자가 ciphertext 만으로 평문의 동일성/패턴을 추론 가능. CBC + 정적 IV 는 알려진 plaintext 공격에 취약.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

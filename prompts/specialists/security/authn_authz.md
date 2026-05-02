@@ -55,7 +55,7 @@
   "severity": "P0",
   "location": "api/admin_routes.py:42",
   "description": "신규 라우트 GET /admin/users/{id} 가 require_admin 데코레이터 없이 등록됨. 같은 파일의 다른 라우트는 모두 데코레이터 사용 중.",
-  ""threat_or_impact": "임의의 인증된 사용자가 admin 사용자 정보를 조회 가능.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "임의의 인증된 사용자가 admin 사용자 정보를 조회 가능.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

@@ -52,7 +52,7 @@
   "severity": "P0",
   "location": "package-lock.json",
   "description": "lodash 4.17.20 → 4.17.20 유지하지만 transitive 로 axios 0.21.0 도입. 이 버전에 CVE-2021-3749 (ReDoS) 존재.",
-  ""threat_or_impact": "공격자가 특수 입력으로 axios 사용 코드 경로의 정규식을 폭발시켜 DoS 유발 가능.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "공격자가 특수 입력으로 axios 사용 코드 경로의 정규식을 폭발시켜 DoS 유발 가능.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

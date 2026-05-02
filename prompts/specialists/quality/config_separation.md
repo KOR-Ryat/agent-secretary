@@ -59,7 +59,7 @@
   "severity": "P2",
   "location": "src/clients/scheduler.py:23",
   "description": "신규 ScheduledJob 클래스에 `WORKER_TIMEOUT = 30` (초) 가 module-level 로 선언되었지만, 같은 코드베이스의 다른 worker 들은 `agent_secretary_config.runtime.WORKER_TIMEOUT` 을 import 해 사용 중. config 모듈로 이동 권장.",
-  ""threat_or_impact": "스케줄러별로 timeout 이 다르게 설정될 가능성. 운영 환경 튜닝 시 변경 지점 분산 — 누락 시 일부만 반영되는 사고.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "스케줄러별로 timeout 이 다르게 설정될 가능성. 운영 환경 튜닝 시 변경 지점 분산 — 누락 시 일부만 반영되는 사고.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

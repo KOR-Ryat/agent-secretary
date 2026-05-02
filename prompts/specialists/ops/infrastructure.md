@@ -54,7 +54,7 @@
   "severity": "P0",
   "location": "infra/iam.tf:23",
   "description": "신규 IAM policy 'lambda-exec' 가 Action: '*', Resource: '*' 로 정의됨.",
-  ""threat_or_impact": "이 Lambda 가 침해되면 모든 AWS 리소스에 대한 임의 작업 가능. 최소 권한 원칙으로 필요한 Action·Resource 만 명시 필요.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "이 Lambda 가 침해되면 모든 AWS 리소스에 대한 임의 작업 가능. 최소 권한 원칙으로 필요한 Action·Resource 만 명시 필요.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

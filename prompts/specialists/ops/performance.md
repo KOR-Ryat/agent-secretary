@@ -53,7 +53,7 @@
   "severity": "P0",
   "location": "api/feed.py:67",
   "description": "GET /feed 핸들러(@hotpath) 에 'for item in items: db.query(Author, item.author_id)' 추가됨. N+1 쿼리 패턴.",
-  ""threat_or_impact": "items 가 100개일 때 DB 왕복 100회 추가. p99 latency 가 수 ms 에서 수백 ms 로 증가 가능. select_related/join 으로 단일 쿼리화 필요.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "items 가 100개일 때 DB 왕복 100회 추가. p99 latency 가 수 ms 에서 수백 ms 로 증가 가능. select_related/join 으로 단일 쿼리화 필요.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

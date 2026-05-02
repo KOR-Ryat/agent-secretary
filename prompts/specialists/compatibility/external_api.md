@@ -54,7 +54,7 @@
   "severity": "P0",
   "location": "openapi.yaml:142",
   "description": "GET /users 응답에서 'username' 필드가 제거됨. 사전 deprecation 표시(@deprecated) 또는 changelog 언급 없음.",
-  ""threat_or_impact": "username 필드를 사용하는 모든 클라이언트가 다음 배포 후 깨짐. 사용자 정보 표시가 빈 값으로 되거나 클라이언트 파싱 에러.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "username 필드를 사용하는 모든 클라이언트가 다음 배포 후 깨짐. 사용자 정보 표시가 빈 값으로 되거나 클라이언트 파싱 에러.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

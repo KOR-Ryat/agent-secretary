@@ -52,7 +52,7 @@
   "severity": "P0",
   "location": "src/index.ts:14, package.json",
   "description": "createClient 함수가 새 필수 파라미터 'apiVersion' 을 받도록 변경됨. package.json version 은 1.4.0 → 1.5.0 (minor bump).",
-  ""threat_or_impact": "minor bump 는 backward compatible 이어야 하지만 기존 호출 createClient({apiKey}) 가 컴파일/런타임 에러. 메이저 bump (2.0.0) 로 가거나, apiVersion 을 default 값 있는 optional 파라미터로 변경 필요.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "minor bump 는 backward compatible 이어야 하지만 기존 호출 createClient({apiKey}) 가 컴파일/런타임 에러. 메이저 bump (2.0.0) 로 가거나, apiVersion 을 default 값 있는 optional 파라미터로 변경 필요.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

@@ -52,7 +52,7 @@
   "severity": "P0",
   "location": "src/llm/summarize.py:18",
   "description": "신규 GPT-4 호출이 input 길이 제한 없이 추가됨. 사용자 입력이 그대로 prompt 에 삽입.",
-  ""threat_or_impact": "악의적 사용자가 매우 긴 입력을 보내면 1요청 비용이 수십 달러까지 가능. token 수 상한·입력 truncation 필요. 또한 정상 사용자라도 PR diff 같은 큰 입력에서 비용이 예측 불가.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "악의적 사용자가 매우 긴 입력을 보내면 1요청 비용이 수십 달러까지 가능. token 수 상한·입력 truncation 필요. 또한 정상 사용자라도 PR diff 같은 큰 입력에서 비용이 예측 불가.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

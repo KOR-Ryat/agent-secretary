@@ -50,7 +50,7 @@
   "severity": "P2",
   "location": "metrics/payments.py:12",
   "description": "신규 메트릭 'payment_completed' 의 라벨에 user_id 가 포함됨.",
-  ""threat_or_impact": "사용자 수가 N 이면 메트릭 시리즈가 N 배 증가. Prometheus 메모리 사용량 폭발 위험. user_id 대신 user_segment 같은 저카디널리티 라벨로 변경 필요.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "사용자 수가 N 이면 메트릭 시리즈가 N 배 증가. Prometheus 메모리 사용량 폭발 위험. user_id 대신 user_segment 같은 저카디널리티 라벨로 변경 필요.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

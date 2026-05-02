@@ -54,7 +54,7 @@
   "severity": "P0",
   "location": "api/search.py:23",
   "description": "search_term 이 f-string 으로 직접 SQL 에 삽입됨: db.execute(f\"SELECT * FROM items WHERE name LIKE '%{search_term}%'\").",
-  ""threat_or_impact": "공격자가 search_term 에 `' OR 1=1; --` 를 넣으면 모든 row 반환. `'; DROP TABLE items; --` 로 데이터 손실까지 가능.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "공격자가 search_term 에 `' OR 1=1; --` 를 넣으면 모든 row 반환. `'; DROP TABLE items; --` 로 데이터 손실까지 가능.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```

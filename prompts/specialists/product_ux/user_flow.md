@@ -53,7 +53,7 @@
   "severity": "P0",
   "location": "src/routes.tsx:45",
   "description": "/old-settings 라우트가 제거됐지만 /settings 로의 redirect 가 추가되지 않음. 외부 검색 결과나 북마크가 이 경로를 가리킬 수 있음.",
-  ""threat_or_impact": "기존 사용자가 북마크/외부 링크로 진입 시 404. redirect 추가 또는 최소한 '이 페이지는 이동되었습니다' 안내 페이지 필요.",
-      "suggestion": "구체적 수정 방향을 여기에 작성"
+  "threat_or_impact": "기존 사용자가 북마크/외부 링크로 진입 시 404. redirect 추가 또는 최소한 '이 페이지는 이동되었습니다' 안내 페이지 필요.",
+  "suggestion": "구체적 수정 방향을 여기에 작성"
 }
 ```
