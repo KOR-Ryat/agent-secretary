@@ -11,6 +11,7 @@ from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
 from ingress.logging import get_logger
 
@@ -141,18 +142,23 @@ class TraceReader:
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        self._conn: psycopg.AsyncConnection | None = None
+        self._pool: AsyncConnectionPool | None = None
 
     async def connect(self) -> None:
-        self._conn = await psycopg.AsyncConnection.connect(
-            self._dsn, row_factory=dict_row
+        self._pool = AsyncConnectionPool(
+            self._dsn,
+            kwargs={"row_factory": dict_row},
+            min_size=1,
+            max_size=5,
+            open=False,
         )
+        await self._pool.open()
         log.info("dashboard.trace_reader.connected")
 
     async def close(self) -> None:
-        if self._conn is not None:
-            await self._conn.close()
-            self._conn = None
+        if self._pool is not None:
+            await self._pool.close()
+            self._pool = None
 
     async def list_recent(
         self,
@@ -164,7 +170,7 @@ class TraceReader:
         range_token: str | None = None,
         q: str | None = None,
     ) -> list[dict[str, Any]]:
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if decision is not None and decision not in _DECISIONS:
             raise ValueError(f"unknown decision: {decision!r}")
         if workflow is not None and workflow not in _WORKFLOWS:
@@ -176,16 +182,18 @@ class TraceReader:
             decision=decision, workflow=workflow, range_token=range_token, q=q
         )
         params.extend([limit, offset])
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            rows = await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                rows = await cur.fetchall()
         return rows
 
     async def get(self, task_id: str) -> dict[str, Any] | None:
-        assert self._conn is not None, "TraceReader not connected"
-        async with self._conn.cursor() as cur:
-            await cur.execute(_DETAIL_SQL, (task_id,))
-            return await cur.fetchone()
+        assert self._pool is not None, "TraceReader not connected"
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(_DETAIL_SQL, (task_id,))
+                return await cur.fetchone()
 
     async def stats_by_dimension(
         self, dimension: str, range_token: str = "24h", *, limit: int = 20
@@ -198,7 +206,7 @@ class TraceReader:
         bucket. Order: total DESC, then escalation DESC for tiebreak so
         risky high-volume sources surface first.
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if range_token not in _RANGE_TO_INTERVAL:
             raise ValueError(f"unknown range token: {range_token!r}")
         if dimension == "repo":
@@ -237,9 +245,10 @@ class TraceReader:
         ORDER BY total DESC, escalate DESC
         LIMIT %s
         """
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            rows = await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                rows = await cur.fetchall()
         return rows
 
     async def stats_operations(self, range_token: str = "24h") -> dict[str, Any]:
@@ -256,7 +265,7 @@ class TraceReader:
         happen in Python — keeps the SQL portable and the price table
         in one place.
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if range_token not in _RANGE_TO_INTERVAL:
             raise ValueError(f"unknown range token: {range_token!r}")
         interval = _RANGE_TO_INTERVAL[range_token]
@@ -272,9 +281,10 @@ class TraceReader:
         FROM pr_trace
         {where}
         """
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            rows = await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                rows = await cur.fetchall()
         return {"range": range_token, "rows": rows}
 
     async def list_ab_pair(self, event_id: str) -> list[dict[str, Any]]:
@@ -284,7 +294,7 @@ class TraceReader:
         with workflow=`pr_review_monolithic` (shadow). Order:
         primary first, shadow second.
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         sql = """
         SELECT
             task_id, event_id, workflow, source_channel,
@@ -297,9 +307,10 @@ class TraceReader:
           AND workflow IN ('pr_review', 'pr_review_monolithic')
         ORDER BY workflow ASC  -- 'pr_review' < 'pr_review_monolithic'
         """
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, (event_id,))
-            return await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, (event_id,))
+                return await cur.fetchall()
 
     async def stats_ab(self, range_token: str = "24h") -> dict[str, Any]:
         """Aggregate A/B agreement: rate of pr_review vs pr_review_monolithic
@@ -308,7 +319,7 @@ class TraceReader:
         Only includes events that have BOTH workflows completed. Events
         with one side still in flight (or AB mode disabled) are skipped.
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if range_token not in _RANGE_TO_INTERVAL:
             raise ValueError(f"unknown range token: {range_token!r}")
         interval = _RANGE_TO_INTERVAL[range_token]
@@ -340,9 +351,10 @@ class TraceReader:
         ORDER BY a.created_at DESC
         LIMIT 50
         """
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            rows = await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                rows = await cur.fetchall()
 
         agree = sum(1 for r in rows if r["primary_decision"] == r["shadow_decision"])
         total = len(rows)
@@ -364,7 +376,7 @@ class TraceReader:
         not record a confidence are excluded — they contribute to the
         ``no_decision`` counter on /api/stats/decisions instead.
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if range_token not in _RANGE_TO_INTERVAL:
             raise ValueError(f"unknown range token: {range_token!r}")
         interval = _RANGE_TO_INTERVAL[range_token]
@@ -390,9 +402,10 @@ class TraceReader:
         ORDER BY bin
         """
         params: tuple[Any, ...] = (interval,) if interval is not None else ()
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            rows = await cur.fetchall()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                rows = await cur.fetchall()
 
         counts = [0] * 10
         for r in rows:
@@ -412,15 +425,16 @@ class TraceReader:
         ``range_token`` must be one of ``_RANGE_TO_INTERVAL``; an unknown
         value raises ``ValueError`` (the route validates before calling).
         """
-        assert self._conn is not None, "TraceReader not connected"
+        assert self._pool is not None, "TraceReader not connected"
         if range_token not in _RANGE_TO_INTERVAL:
             raise ValueError(f"unknown range token: {range_token!r}")
         interval = _RANGE_TO_INTERVAL[range_token]
         sql = _decision_stats_sql(with_window=interval is not None)
         params: tuple[Any, ...] = (interval,) if interval is not None else ()
-        async with self._conn.cursor() as cur:
-            await cur.execute(sql, params)
-            row = await cur.fetchone()
+        async with self._pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(sql, params)
+                row = await cur.fetchone()
         # Empty table → all zeros, avg None.
         row = row or {
             "total": 0,
