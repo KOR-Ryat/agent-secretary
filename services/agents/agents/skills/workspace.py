@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_secretary_config import Repo
+from agent_secretary_config import GitHubAppAuth, Repo
 
 from agents.logging import get_logger
 
@@ -43,7 +43,6 @@ log = get_logger("agents.skills.workspace")
 @dataclass(frozen=True)
 class WorkspaceSettings:
     workspace_dir: Path
-    github_token: str | None
     git_executable: str = "git"
 
     @classmethod
@@ -54,10 +53,7 @@ class WorkspaceSettings:
                 "AGENT_WORKSPACE_DIR is required. Set it in .env (local) or "
                 "docker-compose env (prod). See docs/workspace.md."
             )
-        return cls(
-            workspace_dir=Path(raw).expanduser(),
-            github_token=os.environ.get("GITHUB_TOKEN") or None,
-        )
+        return cls(workspace_dir=Path(raw).expanduser())
 
 
 # --- Errors --------------------------------------------------------------
@@ -73,8 +69,9 @@ class WorkspaceError(RuntimeError):
 class WorkspaceManager:
     """Owns the on-disk `repos/` and `worktrees/` layout."""
 
-    def __init__(self, settings: WorkspaceSettings) -> None:
+    def __init__(self, settings: WorkspaceSettings, auth: GitHubAppAuth | None = None) -> None:
         self._settings = settings
+        self._auth = auth
 
     @property
     def workspace_dir(self) -> Path:
@@ -103,7 +100,7 @@ class WorkspaceManager:
             return bare
 
         bare.parent.mkdir(parents=True, exist_ok=True)
-        url = self._clone_url(repo)
+        url = await self._clone_url(repo)
         log.info("workspace.clone.start", repo=repo.name, dest=str(bare))
         await self._git("clone", "--bare", url, str(bare))
         log.info("workspace.clone.done", repo=repo.name)
@@ -114,6 +111,14 @@ class WorkspaceManager:
         bare = self.bare_path(repo)
         if not bare.exists():
             raise WorkspaceError(f"bare repo missing: {bare}")
+        if self._auth is None:
+            raise WorkspaceError(
+                "GitHub App auth not configured. "
+                "Set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY."
+            )
+        token = await self._auth.get_token()
+        remote_url = f"https://x-access-token:{token}@github.com/{repo.name}.git"
+        await self._git("-C", str(bare), "remote", "set-url", "origin", remote_url)
         await self._git("-C", str(bare), "fetch", "--all", "--prune")
 
     @asynccontextmanager
@@ -175,11 +180,14 @@ class WorkspaceManager:
 
     # --- Internals ------------------------------------------------------
 
-    def _clone_url(self, repo: Repo) -> str:
-        token = self._settings.github_token
-        if token:
-            return f"https://{token}@github.com/{repo.name}.git"
-        return f"https://github.com/{repo.name}.git"
+    async def _clone_url(self, repo: Repo) -> str:
+        if self._auth is None:
+            raise WorkspaceError(
+                "GitHub App auth not configured. "
+                "Set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY."
+            )
+        token = await self._auth.get_token()
+        return f"https://x-access-token:{token}@github.com/{repo.name}.git"
 
     async def _git(self, *args: str) -> None:
         proc = await asyncio.create_subprocess_exec(

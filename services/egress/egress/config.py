@@ -8,7 +8,6 @@ class Settings:
     log_level: str
     consumer_group: str
     consumer_name: str
-    github_token: str | None
     slack_bot_token: str | None
 
     @classmethod
@@ -18,6 +17,5 @@ class Settings:
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
             consumer_group=os.environ.get("EGRESS_CONSUMER_GROUP", "egress"),
             consumer_name=os.environ.get("EGRESS_CONSUMER_NAME", "egress-1"),
-            github_token=os.environ.get("GITHUB_TOKEN") or None,
             slack_bot_token=os.environ.get("SLACK_BOT_TOKEN") or None,
         )

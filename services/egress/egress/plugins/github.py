@@ -9,6 +9,7 @@ Phase 1 (shadow mode): comments only — no merge, label, or status changes.
 from __future__ import annotations
 
 import httpx
+from agent_secretary_config import GitHubAppAuth
 from agent_secretary_schemas import ResultEvent
 
 from egress.logging import get_logger
@@ -20,8 +21,8 @@ log = get_logger("egress.plugins.github")
 class GithubDeliverer(ChannelDeliverer):
     name = "github"
 
-    def __init__(self, token: str | None) -> None:
-        self._token = token
+    def __init__(self, auth: GitHubAppAuth | None) -> None:
+        self._auth = auth
         self._client = httpx.AsyncClient(
             base_url="https://api.github.com",
             timeout=httpx.Timeout(15.0),
@@ -45,20 +46,21 @@ class GithubDeliverer(ChannelDeliverer):
             )
             return
 
-        if not self._token:
+        if not self._auth:
             log.warning(
-                "github.deliver.no_token",
+                "github.deliver.no_auth",
                 repo=repo,
                 pr_number=pr_number,
-                hint="set GITHUB_TOKEN; skipping actual POST",
+                hint="set GITHUB_APP_ID / GITHUB_APP_INSTALLATION_ID / GITHUB_APP_PRIVATE_KEY",
             )
             return
 
+        token = await self._auth.get_token()
         url = f"/repos/{repo}/issues/{pr_number}/comments"
         response = await self._client.post(
             url,
             json={"body": result.summary_markdown},
-            headers={"Authorization": f"Bearer {self._token}"},
+            headers={"Authorization": f"Bearer {token}"},
         )
         response.raise_for_status()
         log.info(
