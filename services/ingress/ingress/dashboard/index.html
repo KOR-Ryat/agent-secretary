@@ -607,13 +607,13 @@
         const pairs = s.pairs.map(p => {
           const live = p.live, dlq = p.dlq;
           const pending = (live.groups || []).reduce((a, g) => a + (g.pending || 0), 0);
-          // Severity heuristics:
-          //   crit  if anything in DLQ, or pending > 100, or oldest age > 1h
-          //   alert if depth > 50 or oldest age > 5m
+          // Severity heuristics (pending-based — oldest_age is stream history, not lag):
+          //   crit  if anything in DLQ, or pending > 100
+          //   alert if pending > 10
           let cls = '';
-          if (dlq.length > 0 || pending > 100 || (live.oldest_age_seconds || 0) > 3600) {
+          if (dlq.length > 0 || pending > 100) {
             cls = 'crit';
-          } else if (live.length > 50 || (live.oldest_age_seconds || 0) > 300) {
+          } else if (pending > 10) {
             cls = 'alert';
           }
           const ageStr = live.length ? `· age ${fmtAge(live.oldest_age_seconds)}` : '';
