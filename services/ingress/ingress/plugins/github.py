@@ -20,9 +20,8 @@ from ingress.publisher import EventPublisher
 log = get_logger("ingress.plugins.github")
 
 _LABEL_REQUEST = "agent:request-review"
-
-# Automatic PR triggers are disabled — explicit label required.
-# _HANDLED_PR_ACTIONS = {"opened", "synchronize", "reopened"}
+_LABEL_PREVENT = "agent:prevent-request"
+_AUTO_PR_ACTIONS = {"opened", "synchronize", "reopened"}
 
 
 class GithubChannelParser(ChannelParser):
@@ -84,6 +83,8 @@ class GithubChannelParser(ChannelParser):
         payload = json.loads(payload_bytes)
         action = payload.get("action")
 
+        if event_type == "pull_request" and action in _AUTO_PR_ACTIONS:
+            return self._parse_pr_auto(payload, delivery_id)
         if event_type == "pull_request" and action == "labeled":
             return self._parse_pr_label(payload, delivery_id)
         if event_type == "issues" and action == "labeled":
@@ -93,6 +94,57 @@ class GithubChannelParser(ChannelParser):
 
         log.info("github.webhook.unsupported_event", event_type=event_type, action=action)
         return None
+
+    def _parse_pr_auto(self, payload: dict, delivery_id: str | None) -> RawEvent | None:
+        pr = payload["pull_request"]
+        if pr.get("draft"):
+            return None
+
+        labels = {lbl["name"] for lbl in (pr.get("labels") or [])}
+        if _LABEL_PREVENT in labels:
+            log.info("github.webhook.auto_pr.prevented", pr=pr["number"])
+            return None
+
+        repo = payload["repository"]
+        installation_id = (payload.get("installation") or {}).get("id")
+        action = payload.get("action")
+        normalized = {
+            "trigger": "auto_pr",
+            "subject": "pr",
+            "repo": {
+                "owner": repo["owner"]["login"],
+                "name": repo["name"],
+                "full_name": repo["full_name"],
+            },
+            "pr": {
+                "number": pr["number"],
+                "title": pr["title"],
+                "description": pr.get("body") or "",
+                "author": pr["user"]["login"],
+                "head_sha": pr["head"]["sha"],
+                "base_sha": pr["base"]["sha"],
+                "url": pr["html_url"],
+            },
+            "installation_id": installation_id,
+        }
+        log.info("github.webhook.auto_pr", pr=pr["number"], action=action)
+        return RawEvent(
+            event_id=delivery_id or str(uuid.uuid4()),
+            source_channel="github",
+            received_at=datetime.now(UTC),
+            raw_payload=payload,
+            normalized=normalized,
+            response_routing=ResponseRouting(
+                primary=ChannelTarget(
+                    channel="github",
+                    target={
+                        "repo": repo["full_name"],
+                        "pr_number": pr["number"],
+                        "installation_id": installation_id,
+                    },
+                )
+            ),
+        )
 
     def _parse_pr_label(self, payload: dict, delivery_id: str | None) -> RawEvent | None:
         label = (payload.get("label") or {}).get("name", "")

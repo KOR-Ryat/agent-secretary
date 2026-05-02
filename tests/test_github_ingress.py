@@ -35,7 +35,7 @@ def _make_client(secret: str | None) -> tuple[TestClient, AsyncMock]:
     return TestClient(app), publisher
 
 
-def _pr_payload(*, action: str = "opened", draft: bool = False) -> dict:
+def _pr_payload(*, action: str = "opened", draft: bool = False, labels: list[str] | None = None) -> dict:
     return {
         "action": action,
         "pull_request": {
@@ -47,6 +47,7 @@ def _pr_payload(*, action: str = "opened", draft: bool = False) -> dict:
             "base": {"sha": "def456"},
             "html_url": "https://github.com/owner/repo/pull/42",
             "draft": draft,
+            "labels": [{"name": lbl} for lbl in (labels or [])],
         },
         "repository": {
             "owner": {"login": "owner"},
@@ -187,9 +188,9 @@ def test_unsupported_event_type_skipped():
 @pytest.mark.parametrize(
     "action,should_publish",
     [
-        ("opened", False),
-        ("synchronize", False),
-        ("reopened", False),
+        ("opened", True),
+        ("synchronize", True),
+        ("reopened", True),
         ("closed", False),
         ("labeled", False),
         ("review_requested", False),
@@ -211,6 +212,15 @@ def test_pr_action_filtering(action, should_publish):
         publisher.publish.assert_awaited_once()
     else:
         publisher.publish.assert_not_awaited()
+
+
+def test_prevent_label_skips_auto_pr():
+    secret = "s"
+    client, publisher = _make_client(secret)
+    body = json.dumps(_pr_payload(action="opened", labels=["agent:prevent-request"])).encode()
+    res = _post(client, body=body, event_type="pull_request", signature=_sign(secret, body))
+    assert res.status_code == 200
+    publisher.publish.assert_not_awaited()
 
 
 def test_draft_pr_is_skipped():

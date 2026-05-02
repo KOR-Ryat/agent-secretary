@@ -50,7 +50,7 @@ GITHUB_TRIGGER_TO_WORKFLOW: dict[str, str] = {
 }
 
 # Triggers that auto-fire on PR events (opened/synchronize/reopened)
-GITHUB_AUTO_PR_TRIGGERS: frozenset[str] = frozenset()  # disabled; use explicit triggers
+GITHUB_AUTO_PR_TRIGGERS: frozenset[str] = frozenset({"auto_pr"})
 
 
 def classify_slack_text(text: str) -> str | None:
