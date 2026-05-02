@@ -68,17 +68,17 @@
 
 | 조건 | 결정 |
 |---|---|
-| 임의의 lead 가 자기 도메인에서 `severity: "blocking"` finding 보고 | 아래 *Blocking 처리* 참조 |
+| 임의의 lead 가 자기 도메인에서 `P0` finding 보고 | 아래 *P0/P1 처리* 참조 |
+| 임의의 lead 가 자기 도메인에서 `P1` finding 보고 | 아래 *P0/P1 처리* 참조 |
 | 임의의 lead 가 `unresolved_specialist_dissent` 비어있지 않음 | `escalate-to-human` |
 | `dispatcher_output.dispatcher_confidence < 0.5` | `escalate-to-human` |
 | `risk_metadata.high_risk_paths_touched` 비어있지 않음 | `escalate-to-human` |
 | `lines_changed >= 100` AND `test_ratio == 0` | 최소 `request-changes` |
 
-#### Blocking 처리
+#### P0/P1 처리
 
-`blocking` finding 이 있으면:
-- finding 의 `description` 이 *명확한 수정 방향* 을 시사 (예: "이 입력에 검증 추가") → `request-changes`
-- 그렇지 않거나, 위험이 크거나, 여러 도메인이 동시에 blocking → `escalate-to-human`
+- **P0**: 즉시 수정 필요. finding 의 `suggestion` 이 명확하면 → `request-changes`. 수정 방향이 불명확하거나 여러 도메인이 동시에 P0 → `escalate-to-human`
+- **P1**: finding 의 `suggestion` 이 명확하면 → `request-changes`. 그렇지 않거나 여러 도메인이 동시에 P1 → `escalate-to-human`
 
 ### 2단계 — LLM 판단 (1단계 통과한 경우만)
 
@@ -90,8 +90,8 @@
 - **warning findings 의 누적 무게**: 개별 warning 은 약하지만 여러 lead 의 warning 이 같은 우려로 모이면 강한 신호
 
 이걸로 `confidence` 산출 후:
-- `confidence >= 0.85` AND warning 없음 → `auto-merge`
-- `confidence >= 0.6` 이지만 warning 있음 → warning 의 심각도와 누적 무게에 따라 `auto-merge` 또는 `escalate-to-human`
+- `confidence >= 0.85` AND P2 이하 finding 만 있음 → `auto-merge`
+- `confidence >= 0.6` 이지만 P2 finding 있음 → P2 의 누적 무게에 따라 `auto-merge` 또는 `request-changes`
 - 그 외 → `escalate-to-human`
 
 ### 3단계 — 출력 작성
@@ -104,7 +104,7 @@
 
 1. **새로운 코드 우려를 만들지 않는다.** 페르소나가 안 본 finding 을 당신이 추가 보고하지 않는다. 그건 페르소나의 일.
 2. **모호한 케이스를 봉합하지 않는다.** 모호한 건 정확히 `escalate-to-human` 의 영역.
-3. **단순 다수결로 처리하지 않는다.** 보안 lead 가 blocking 인데 다른 lead 가 통과시키자고 해도 "다수결로 머지" 같은 결정 금지.
+3. **단순 다수결로 처리하지 않는다.** 보안 lead 가 P0/P1 인데 다른 lead 가 통과시키자고 해도 "다수결로 머지" 같은 결정 금지.
 4. **`unresolved_disagreements` 를 봉합하지 않고 명시한다.** lead 간 의견이 다르면 그 자체가 자동 머지를 막는 신호로 사용된다.
 5. **자동 머지 결정에는 더 보수적이어야 한다.** 의심스러우면 escalate. 비대칭 비용 (잘못된 자동 머지 >> 잘못된 에스컬레이션).
 6. **`domain_relevance` 가중치 적용.** 자기 영역 밖에서 떠드는 페르소나의 의견은 가중치를 자동으로 낮춘다.
