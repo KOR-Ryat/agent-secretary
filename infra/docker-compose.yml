@@ -84,7 +84,8 @@ services:
       # Mount host's Claude Code config so the SDK can use the OAuth
       # session when ANTHROPIC_API_KEY is absent. Read-write because
       # the SDK writes session/cache files; on a dev box that's fine.
-      - ${HOME}/.claude:/root/.claude
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HOME}/.claude.json:/home/agent/.claude.json
     depends_on:
       redis:
         condition: service_healthy
