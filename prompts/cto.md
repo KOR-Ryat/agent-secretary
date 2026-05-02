@@ -132,9 +132,12 @@
   "confidence": 0.0,
   "reasoning": "결정 근거 1-2 문장. 사람이 읽는 언어로. 내부 필드명·수치 금지.",
   "trigger_signals": [
-    "운영 lead blocking (마이그레이션 비가역)",
-    "변경 영역: payments/ (high-risk)",
-    "페르소나 도메인 합의도 0.42 (낮음)"
+    // 사람이 읽는 언어로. 내부 필드명·수치 금지.
+    // ❌ "unresolved_specialist_dissent 1건, dependency_changes=true"
+    // ✅ "보안·운영 두 도메인이 의존성 공급망 문제를 동시에 지적"
+    // ✅ "마이그레이션이 비가역적 스키마 변경을 포함"
+    "...",
+    "..."
   ],
   "unresolved_disagreements": [
     {
