@@ -2,8 +2,7 @@
 
 Reads `response_routing.primary.target` for `repo` and `pr_number`, posts
 the result's `summary_markdown` as an issue comment using the GitHub REST API.
-
-Phase 1 (shadow mode): comments only — no merge, label, or status changes.
+For label-triggered workflows, removes agent:request-review after posting.
 """
 
 from __future__ import annotations
@@ -70,6 +69,25 @@ class GithubDeliverer(ChannelDeliverer):
             result_id=result.result_id,
             comment_id=response.json().get("id"),
         )
+
+        await self._remove_review_label(token, repo, pr_number)
+
+    async def _remove_review_label(self, token: str, repo: str, number: int) -> None:
+        label = "agent:request-received"
+        resp = await self._client.request(
+            "DELETE",
+            f"/repos/{repo}/issues/{number}/labels/{label}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if resp.status_code not in (200, 404):
+            log.warning(
+                "github.deliver.label_remove_failed",
+                repo=repo,
+                number=number,
+                status=resp.status_code,
+            )
+        else:
+            log.info("github.deliver.label_removed", repo=repo, number=number)
 
     async def close(self) -> None:
         await self._client.aclose()

@@ -19,7 +19,10 @@ from ingress.publisher import EventPublisher
 
 log = get_logger("ingress.plugins.github")
 
-_HANDLED_PR_ACTIONS = {"opened", "synchronize", "reopened"}
+_LABEL_REQUEST = "agent:request-review"
+
+# Automatic PR triggers are disabled — explicit label required.
+# _HANDLED_PR_ACTIONS = {"opened", "synchronize", "reopened"}
 
 
 class GithubChannelParser(ChannelParser):
@@ -77,13 +80,23 @@ class GithubChannelParser(ChannelParser):
 
         if event_type == "ping":
             return None
-        if event_type != "pull_request":
-            log.info("github.webhook.unsupported_event", event_type=event_type)
-            return None
 
         payload = json.loads(payload_bytes)
         action = payload.get("action")
-        if action not in _HANDLED_PR_ACTIONS:
+
+        if event_type == "pull_request" and action == "labeled":
+            return self._parse_pr_label(payload, delivery_id)
+        if event_type == "issues" and action == "labeled":
+            return self._parse_issue_label(payload, delivery_id)
+        if event_type == "issue_comment" and action == "created":
+            return self._parse_comment_trigger(payload, delivery_id)
+
+        log.info("github.webhook.unsupported_event", event_type=event_type, action=action)
+        return None
+
+    def _parse_pr_label(self, payload: dict, delivery_id: str | None) -> RawEvent | None:
+        label = (payload.get("label") or {}).get("name", "")
+        if label != _LABEL_REQUEST:
             return None
 
         pr = payload["pull_request"]
@@ -91,8 +104,10 @@ class GithubChannelParser(ChannelParser):
             return None
 
         repo = payload["repository"]
+        installation_id = (payload.get("installation") or {}).get("id")
         normalized = {
-            "trigger": f"pr_{action}",
+            "trigger": "label_request",
+            "subject": "pr",
             "repo": {
                 "owner": repo["owner"]["login"],
                 "name": repo["name"],
@@ -107,25 +122,113 @@ class GithubChannelParser(ChannelParser):
                 "base_sha": pr["base"]["sha"],
                 "url": pr["html_url"],
             },
-            "installation_id": (payload.get("installation") or {}).get("id"),
+            "installation_id": installation_id,
         }
-
-        response_routing = ResponseRouting(
-            primary=ChannelTarget(
-                channel="github",
-                target={
-                    "repo": repo["full_name"],
-                    "pr_number": pr["number"],
-                    "installation_id": normalized["installation_id"],
-                },
-            )
-        )
-
         return RawEvent(
             event_id=delivery_id or str(uuid.uuid4()),
             source_channel="github",
             received_at=datetime.now(UTC),
             raw_payload=payload,
             normalized=normalized,
-            response_routing=response_routing,
+            response_routing=ResponseRouting(
+                primary=ChannelTarget(
+                    channel="github",
+                    target={
+                        "repo": repo["full_name"],
+                        "pr_number": pr["number"],
+                        "installation_id": installation_id,
+                    },
+                )
+            ),
+        )
+
+    def _parse_comment_trigger(self, payload: dict, delivery_id: str | None) -> RawEvent | None:
+        body = (payload.get("comment") or {}).get("body", "").strip()
+        if not body.startswith("!리뷰"):
+            return None
+
+        issue = payload["issue"]
+        # Only handle comments on PRs (issues have no pull_request field)
+        if not issue.get("pull_request"):
+            log.info("github.webhook.comment_trigger.not_a_pr", issue=issue["number"])
+            return None
+
+        repo = payload["repository"]
+        installation_id = (payload.get("installation") or {}).get("id")
+        normalized = {
+            "trigger": "comment_request",
+            "subject": "pr",
+            "repo": {
+                "owner": repo["owner"]["login"],
+                "name": repo["name"],
+                "full_name": repo["full_name"],
+            },
+            "pr": {
+                "number": issue["number"],
+                "title": issue["title"],
+                "description": issue.get("body") or "",
+                "author": issue["user"]["login"],
+                "url": issue["html_url"],
+            },
+            "installation_id": installation_id,
+        }
+        return RawEvent(
+            event_id=delivery_id or str(uuid.uuid4()),
+            source_channel="github",
+            received_at=datetime.now(UTC),
+            raw_payload=payload,
+            normalized=normalized,
+            response_routing=ResponseRouting(
+                primary=ChannelTarget(
+                    channel="github",
+                    target={
+                        "repo": repo["full_name"],
+                        "pr_number": issue["number"],
+                        "installation_id": installation_id,
+                    },
+                )
+            ),
+        )
+
+    def _parse_issue_label(self, payload: dict, delivery_id: str | None) -> RawEvent | None:
+        label = (payload.get("label") or {}).get("name", "")
+        if label != _LABEL_REQUEST:
+            return None
+
+        issue = payload["issue"]
+        repo = payload["repository"]
+        installation_id = (payload.get("installation") or {}).get("id")
+        normalized = {
+            "trigger": "label_request",
+            "subject": "issue",
+            "repo": {
+                "owner": repo["owner"]["login"],
+                "name": repo["name"],
+                "full_name": repo["full_name"],
+            },
+            "issue": {
+                "number": issue["number"],
+                "title": issue["title"],
+                "description": issue.get("body") or "",
+                "author": issue["user"]["login"],
+                "url": issue["html_url"],
+            },
+            "installation_id": installation_id,
+        }
+        return RawEvent(
+            event_id=delivery_id or str(uuid.uuid4()),
+            source_channel="github",
+            received_at=datetime.now(UTC),
+            raw_payload=payload,
+            normalized=normalized,
+            response_routing=ResponseRouting(
+                primary=ChannelTarget(
+                    channel="github",
+                    target={
+                        "repo": repo["full_name"],
+                        "pr_number": issue["number"],
+                        "installation_id": installation_id,
+                    },
+                )
+            ),
         )
